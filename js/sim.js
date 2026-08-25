@@ -113,7 +113,8 @@ export function createGame(seed) {
     pred: [0, 0],
     events: [],           /* consumed by the UI: {kind, ...} */
     stats: { shotsFired: 0, hitsTaken: 0, foeShots: 0, foeHits: 0, foeReloads: 0,
-             foeDry: 0, foeEmptyFrames: 0, foeAliveFrames: 0 },
+             foeDry: 0, foeEmptyFrames: 0, foeAliveFrames: 0,
+             youEmptyFrames: 0, youAliveFrames: 0 },
   };
   g.look = castFor(g.seed);
   newRoom(g, true);
@@ -281,7 +282,8 @@ export function restart(g) {
      session report could never have shown them even if it had asked. Keep
      this in step with the literal in createGame. */
   g.stats = { shotsFired: 0, hitsTaken: 0, foeShots: 0, foeHits: 0,
-              foeReloads: 0, foeDry: 0, foeEmptyFrames: 0, foeAliveFrames: 0 };
+              foeReloads: 0, foeDry: 0, foeEmptyFrames: 0, foeAliveFrames: 0,
+              youEmptyFrames: 0, youAliveFrames: 0 };
   newRoom(g, false);
 }
 
@@ -396,6 +398,14 @@ export function step(g, input, dtMs) {
      frames of a still body learns that standing still IS the game — the old
      style channel was bitten by exactly this and the blank slate has further to
      fall, because it has no hand-written floor to land on. */
+  /* THE PLAYER'S MAGAZINE, COUNTED THE SAME WAY AS THE MIRROR'S, so the report
+     can show both columns. Counted for every live frame whether or not the
+     frame teaches -- how long you spend empty is a fact about the fight, not
+     about the lesson. */
+  if (g.you && !g.you.dead) {
+    g.stats.youAliveFrames = (g.stats.youAliveFrames || 0) + 1;
+    if ((g.you.ammo || 0) <= 0) g.stats.youEmptyFrames = (g.stats.youEmptyFrames || 0) + 1;
+  }
   if (teach && !afk) {
     const a2 = g.actYou;
     a2[0] = input.keys.has('w') ? 1 : 0; a2[1] = input.keys.has('a') ? 1 : 0;

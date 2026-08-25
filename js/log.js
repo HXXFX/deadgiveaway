@@ -189,7 +189,12 @@ export function report(L, g) {
      runs is the exact failure this project keeps having. */
   line('  THE REHEARSAL. Watching you is not enough on its own: the strongest');
   line('  published cloning agent for a shooter trained on four million frames,');
-  line('  and cloned errors compound over a fight — which is why it can match 94%');
+  /* THE MEASURED FIGURE, NOT A REMEMBERED ONE. This said 94% in prose while
+     section 1 of the same report computed 92% from the same session -- two
+     numbers for one quantity, one of them frozen at whatever it read the day
+     the sentence was written. The paragraph above warns about exactly this. */
+  line('  and cloned errors compound over a fight — which is why it can match '
+       + pc(A.keysRaw));
   line('  of your key frames and still wander. So between rounds it fights a FROZEN');
   line('  COPY OF ITSELF and keeps whatever led to landing a round.');
   line('');
@@ -231,9 +236,16 @@ export function report(L, g) {
     /* THE MAGAZINE, FOR BOTH HANDS. Added after a player reported the Mirror
        "not knowing how to reload any more" at round fifteen — which was true and
        which nothing here reported. It is measured, so it is shown. */
+    /* BOTH COLUMNS, as the note on gap and range above says. The first version
+       of this row showed an em-dash for the player, which makes a table headed
+       "you / it" quietly a table about it. The player's magazine is counted the
+       same way in sim.js. */
     const aliveF = g.stats.foeAliveFrames || 0;
     const emptyPct = aliveF ? Math.round(100 * (g.stats.foeEmptyFrames || 0) / aliveF) : 0;
-    row('empty', '—', emptyPct + '%', '', 'of its life with nothing in the magazine');
+    const yAliveF = g.stats.youAliveFrames || 0;
+    const yEmptyPct = yAliveF ? Math.round(100 * (g.stats.youEmptyFrames || 0) / yAliveF) : 0;
+    row('empty', (yAliveF ? yEmptyPct + '%' : '—'), emptyPct + '%', '',
+        'of its life with nothing in the magazine');
     row('dry', (L.you.dry || 0), (g.stats.foeDry || 0), '', 'trigger pulled on an empty gun');
     if (emptyPct >= 40) {
       line('');
