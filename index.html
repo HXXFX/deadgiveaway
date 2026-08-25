@@ -246,6 +246,10 @@
      straight into a conversation. A chart cannot be pasted, and the whole point
      of this panel is that what happened in a real session reaches whoever is
      fixing it. -->
+<!-- Sits over everything and is never clicked through to: the scanlines, the
+     grille, the corner falloff and the sheen of a tube lit from the front. -->
+<div class="crtface" id="crtface" aria-hidden="true"></div>
+
 <div class="rpt" id="rpt" hidden role="dialog" aria-modal="true" aria-label="Session report">
   <div class="rpt-box">
     <div class="rpt-bar">
@@ -277,6 +281,21 @@
           color-interpolation-filters="sRGB">
     <feImage id="crtMap" preserveAspectRatio="none" result="map"></feImage>
     <feDisplacementMap in="SourceGraphic" in2="map" id="crtDisp"
+                       xChannelSelector="R" yChannelSelector="G"></feDisplacementMap>
+  </filter>
+  <!-- THE FACE OF THE TUBE, over the whole window.
+       This bends the GLASS and not the content, and the difference is not a
+       style choice: a filter is not part of layout, so anything clickable
+       inside one ends up drawn in a different place from where it can be
+       pressed. Measured — a box offset 60,40 by a filter reports its rect
+       unmoved and is not hit where it appears; the same offset by a transform
+       moves the rect with it. So the content stays flat and this layer, which
+       is pointer-events:none and has nothing to click, takes the whole curve.
+       It can therefore be bent about twice as hard as the arena is. -->
+  <filter id="crtFace" x="0%" y="0%" width="100%" height="100%"
+          color-interpolation-filters="sRGB">
+    <feImage id="faceMap" preserveAspectRatio="none" result="fmap"></feImage>
+    <feDisplacementMap in="SourceGraphic" in2="fmap" id="faceDisp"
                        xChannelSelector="R" yChannelSelector="G"></feDisplacementMap>
   </filter>
 </svg>

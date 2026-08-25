@@ -671,7 +671,57 @@ function buildCrtMap() {
      displacement of `value * side` pixels needs scale = side * peak * 255/127. */
   disp.setAttribute('scale', String(side * peak * (255 / 127)));
 }
+
+/* THE FACE OF THE TUBE, built from the WINDOW rather than the arena and bent
+   about twice as hard.
+   It can afford that because it is glass: the layer is pointer-events:none, so
+   nothing in it has a hit target to come apart from. Bending the app itself
+   would put every control somewhere other than where it is pressed, because a
+   filter is not part of layout -- measured, a box offset 60,40 by a filter
+   keeps its old rect while a transform moves it. The eye reads a tube from the
+   bowed raster more than from bent text, so this is the stronger effect as
+   well as the free one. */
+const FACE_K = 0.030;
+function buildFaceMap() {
+  const N = 128;
+  const W = window.innerWidth || 1200, H = window.innerHeight || 800;
+  const side = Math.max(W, H);
+  const c = document.createElement('canvas');
+  c.width = c.height = N;
+  const x = c.getContext('2d');
+  const img = x.createImageData(N, N);
+  const dxs = new Float32Array(N * N), dys = new Float32Array(N * N);
+  let peak = 0;
+  for (let j = 0; j < N; j++) {
+    for (let i = 0; i < N; i++) {
+      const u = (i + 0.5) / N * 2 - 1, v = (j + 0.5) / N * 2 - 1;
+      const f = 1 - FACE_K * (u * u + v * v);
+      const dx = (u * f - u) * (W / 2) / side;
+      const dy = (v * f - v) * (H / 2) / side;
+      dxs[j * N + i] = dx; dys[j * N + i] = dy;
+      peak = Math.max(peak, Math.abs(dx), Math.abs(dy));
+    }
+  }
+  for (let k = 0; k < N * N; k++) {
+    img.data[k * 4] = Math.round(128 + (peak ? dxs[k] / peak : 0) * 127);
+    img.data[k * 4 + 1] = Math.round(128 + (peak ? dys[k] / peak : 0) * 127);
+    img.data[k * 4 + 2] = 0;
+    img.data[k * 4 + 3] = 255;
+  }
+  x.putImageData(img, 0, 0);
+  const fe = document.getElementById('faceMap');
+  const disp = document.getElementById('faceDisp');
+  if (!fe || !disp) return;
+  const url = c.toDataURL();
+  fe.setAttributeNS('http://www.w3.org/1999/xlink', 'href', url);
+  fe.setAttribute('href', url);
+  fe.setAttribute('width', '100%'); fe.setAttribute('height', '100%');
+  disp.setAttribute('scale', String(side * peak * (255 / 127)));
+}
+
 buildCrtMap();
+buildFaceMap();
+addEventListener('resize', buildFaceMap);
 addEventListener('resize', buildCrtMap);
 
 /* ====================================================================== */
