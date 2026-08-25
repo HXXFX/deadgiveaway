@@ -182,6 +182,15 @@ function spawnFoes(g) {
        asymmetries on the user's apples-to-apples call. */
     g.foes.push({
       x: sp[0], z: sp[1], maxHp: FOE.hp, ammo: MAG.size, reloadUntil: 0,
+      /* SAME STARTING lastShot AS THE PLAYER, and for the same reason.
+         g.you is built with -PLAYER.fireEvery so its first trigger-pull is
+         not silently eaten by the fire-rate check at now = 0. This body was
+         built without the field at all, so `who.lastShot || 0` made every
+         round begin with one refused shot for the Mirror and none for the
+         player. Found by dev_log/audit AI-05: same state, same frame, the
+         player fired and the Mirror did not. spawnFoes runs every round, so
+         it was not once per session. */
+      lastShot: -PLAYER.fireEvery,
       vx: 0, vz: 0, hx: -1, hz: 0,
       /* Spread around the orbit rather than 2.1 rad apart, so two of them come
          at you from opposite sides instead of arriving together. With one enemy
@@ -454,7 +463,16 @@ export function step(g, input, dtMs) {
        1150 ms of a reload, or every frame of an empty magazine, as "chose not
        to" drags its measured rate toward zero and walks the bias the wrong way.
        Both sides are measured only on frames where the shot was available. */
-    const couldFire = (f.ammo || 0) > 0 && !(f.reloadUntil > g.now);
+    /* ...AND THE CADENCE CAP COUNTS AS UNAVAILABLE TOO. This guard tested
+       ammo and reload only, while shoot() refuses a third case: any frame
+       within fireEvery of the last shot. The action is held for five frames
+       between decisions, so a Mirror that fires on one frame had the next
+       two counted as choosing not to -- measured at 10.2% of admitted frames
+       by dev_log/audit AI-06, dragging its measured rate down and walking
+       the trigger bias exactly the way the paragraph above says it must not.
+       The comment was right; the predicate was one term short. */
+    const couldFire = (f.ammo || 0) > 0 && !(f.reloadUntil > g.now)
+                      && (g.now - (f.lastShot || 0)) >= PLAYER.fireEvery;
     if (couldFire) noteFired(g.A, fired, lineNow);
     /* ITS OWN FRAME, held pending until the life it belongs to can be scored.
        Built exactly the way the player's is built above — same keys, same
