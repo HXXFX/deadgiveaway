@@ -319,7 +319,9 @@ export function makeAgent(seed) {
        Measured on a fresh policy over 20,000 frames (dev_log/audit/probe-coldstart.html):
 
          chose to fire ......... 50.2% of frames
-         chose to reload ....... 49.2% of frames
+         chose to reload ....... 10.1% of frames
+                                 (one decision per five frames now, like the
+                                  keys -- half of decisions, a tenth of frames)
          held >= 1 key ......... 93.8% of decisions, mean 1.98 of 4
          aim ................... uniform across all 15 bins
 
@@ -738,9 +740,26 @@ export function learn(p, x, y) {
    * into the reload net was measured in the same sweep and did nothing (0 of
    * 6 seeds better); the reload stays imitation-only. */
   if (y[RELOAD] > 0.5) {
-    for (let b = 1; b <= 90 && b < p.n; b++) {
+    /* THE THRESHOLD IS THE PLAYER'S OWN, PER PRESS — the magazine level at
+       which THIS reload happened, not a constant chosen here. A fixed 0.21 was
+       measured to never fire for a player who tops up at eight rounds to feel
+       safe (their magazine never visits the window), leaving them with the old
+       starving Mirror; the press-level threshold fires for every style and
+       teaches each player's habit back to them. Whatever made them press —
+       pressure, safety, an empty gun — is in the other numbers of the labelled
+       frames, so the net can learn the context along with the level. */
+    /* PRESS LEVEL PLUS THE APPROACH. A margin of 0.03 never fired at all: the
+       frame before the press sits one round ABOVE the press level (that crossing
+       is why they pressed), so the walk-back broke on its first step and the
+       label was dead for every style -- measured as byte-identical results to no
+       label, and the dry cure regressing from 0% empty to 56%. The window is
+       their own level plus the ~4-round descent into it: a dry reloader keeps
+       exactly the proven cure, a cautious one gets the approach to their own
+       level labelled. */
+    const at = x[34] + 0.21;
+    for (let b = 1; b <= 45 && b < p.n; b++) {
       const i = (p.head - 1 - b + NET.BUF * 2) % NET.BUF;
-      if (p.bx[i * OBS + 34] > 0.21) break;
+      if (p.bx[i * OBS + 34] > at) break;
       p.by[i * ACT + RELOAD] = 1;
     }
   }
@@ -1309,7 +1328,13 @@ export function act(p, x, prevKeys, rnd, frame) {
      one: there is nothing here to correct toward, because a magazine is a fact
      rather than a habit, and the auto-reload in shoot() is the floor under it. */
   const rp = sig(o[RELOAD]);
-  const doReload = rnd() < rp;
+  /* DECIDED AT THE HAND'S TEMPO, NOT THE SIMULATION'S. Sampled every frame,
+     even a small probability above the taught window fires within a second or
+     two -- measured as the Mirror reloading ~7 rounds earlier than its teacher,
+     whatever the teacher's habit. One decision per DECIDE_EVERY frames is the
+     same rule the keys already follow, for the same reason: a hand does not
+     re-decide sixty times a second. */
+  const doReload = fresh ? rnd() < rp : false;
   const out = { keys, aim, fire, fireP: fp, aimOff: off, aimBin: bin,
                 reload: doReload, reloadP: rp,
                 aimP: Array.from(AP, (v) => v / z),
