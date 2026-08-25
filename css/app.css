@@ -248,8 +248,16 @@ button.alt[aria-pressed="true"]:not(:disabled){background:var(--panel);color:var
 .poplink{color:var(--cool);font-weight:700;text-underline-offset:3px}
 .poplink:hover{color:var(--hot)}
 .pop-plate{margin-top:15px;padding-top:11px;border-top:1px solid var(--line);
-  font-size:var(--fs-micro);letter-spacing:.09em;color:var(--ink-3);
+  font-size:var(--fs-micro);letter-spacing:.055em;color:var(--ink-3);
   text-align:center;line-height:1.9}
+/* THE PROVENANCE LINE MUST NOT WRAP. It is the longest string in the panel,
+   so the .09em that suits the headings this plate borrows from overflowed it:
+   327px needed against 316px available, and the two-line stamp rendered as
+   three. .055em measures 310px, which leaves 6px of real slack -- .065em also
+   "fits" at 1px and is a trap, because sub-pixel rounding and the fallback font
+   before the webfont settles both eat more than that. Re-measure if the string
+   or the 350px .pop width ever changes. */
+
 
 /* THE PLATE IS ONE STAMP, NOT A SENTENCE WITH LINKS IN IT. Both an underline
    and a brighter link colour were tried and rejected: either one cuts a single
