@@ -61,6 +61,13 @@
       <p>A top-down shooter whose enemy builds a model of how <em>you</em> move and
          aims where you are about to be. Every panel around the arena is reading
          that model live while you play.</p>
+      <h4>Why it flails at first</h4>
+      <p>It really does start empty &mdash; every weight in the layer that decides
+         what it does is zero. With nothing learned, each decision is an even coin
+         flip, so round one opens with it firing, reloading and turning at random.
+         It has your keys and no idea when to press them. It is shaped within
+         seconds: over one minute, with nothing differing but whether the player
+         pulled a trigger, it went from <em>6</em> shots to <em>56</em>.</p>
       <h4>Your data</h4>
       <p>Nothing is uploaded and nothing is stored. The model of you exists only
          while this tab is open; closing it destroys it. No account, no tracking,

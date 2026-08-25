@@ -239,7 +239,13 @@ button.alt[aria-pressed="true"]:not(:disabled){background:var(--panel);color:var
 /* ---- info popover -------------------------------------------------------- */
 .pop{position:absolute;right:12px;top:calc(100% + 6px);z-index:40;width:350px;
      background:var(--panel-2);border:0;border-top:4px solid var(--hot);border-radius:0;
-     padding:15px 17px;box-shadow:8px 8px 0 var(--shadow),0 14px 34px rgba(0,0,0,.6)}
+     padding:15px 17px;box-shadow:8px 8px 0 var(--shadow),0 14px 34px rgba(0,0,0,.6);
+     /* IT MUST NOT RUN OFF THE BOTTOM OF A SHORT SCREEN. The panel grew to 712px
+        when the cold-start section was added, which clears a 982px window and
+        overflows a 768px laptop -- taking the credit plate, the last thing in it,
+        off screen with no way to reach it. Cap against the viewport and let the
+        panel scroll rather than the page. */
+     max-height:calc(100vh - 72px);overflow-y:auto;overscroll-behavior:contain}
 .pop h3{margin:0 0 9px;font-size:22px}
 .pop h4{margin:13px 0 4px;font-size:var(--fs-micro);letter-spacing:.18em;
         text-transform:uppercase;color:var(--ink-3);font-weight:700}

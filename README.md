@@ -7,10 +7,17 @@ browser, nothing to install.
 
 ## What it is
 
-You fight one opponent, the Mirror. It starts knowing nothing. Every second you
-are alive it is recording how you move, when you shoot, how you use cover and
-when you reload — and it is training on that recording between rounds. It does
-not follow rules someone wrote for it. It copies you.
+You fight one opponent, the Mirror. It starts knowing nothing — every weight in
+the layer that decides what it does is zero. Every second you are alive it is
+watching how you move, when you shoot, how you use cover and when you reload, and
+it is learning from that **while you play**, every frame, with a further study
+pass between rounds. It does not follow rules someone wrote for it. It copies you.
+
+**The first few seconds look like nonsense, and that is what an empty brain looks
+like.** With nothing learned, every decision is an even coin flip, so it opens by
+firing, reloading and turning at random. It has the keys and no idea when to
+press them. That does not last: over one minute, the only difference being
+whether the player pulled a trigger, it went from 6 shots to 56.
 
 So the way it fights is the way *you* fight, a few rounds behind. Change your
 habits and it follows you into the new ones. Keep them, and it gets very good at
