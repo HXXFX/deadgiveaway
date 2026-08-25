@@ -281,12 +281,46 @@ export function makeAgent(seed) {
     b1: new Float32Array(NET.H1),
     w2: Float32Array.from({ length: NET.H1 * NET.H2 }, () => (rnd() * 2 - 1) * a2),
     b2: new Float32Array(NET.H2),
-    /* THE LAST LAYER STARTS AT ZERO, on purpose. A random output layer would
-       have the Mirror mashing keys and the trigger before it has seen anybody
-       do either — which looks like learning and is noise. At zero every key
-       probability is one half and every aim component is nothing, and the
-       decode below reads that as "no keys, no shot, hold still". It stands
-       there until somebody shows it what a body is for. */
+    /* THE LAST LAYER STARTS AT ZERO, on purpose: nothing here is a habit
+       somebody wrote down, so the Mirror cannot express one until it is taught.
+       All 1,430 of these weights and biases are zero and stay zero
+       until the first lesson.
+
+       WHAT THAT LOOKS LIKE ON SCREEN IS NOT STILLNESS, AND THIS COMMENT USED TO
+       SAY IT WAS. It claimed the decode reads zero as "no keys, no shot, hold
+       still ... it stands there until somebody shows it what a body is for".
+       That describes the OLD argmax decode, which was removed for a good reason
+       — thresholding keys at a half made "no keys" an absorbing state: it stood
+       still, standing still is a state the player is never in, so no
+       demonstration covered getting out of it and it never came back. See the
+       cloning traps in dev_log/LEARNINGS.md. act() SAMPLES instead, and
+       sig(0) = 0.5, so an empty brain is a coin flip on every channel.
+
+       Measured on a fresh policy over 20,000 frames (dev_log/audit/probe-coldstart.html):
+
+         fired ................. 50.2% of frames
+         reloaded .............. 49.2% of frames
+         held >= 1 key ......... 93.8% of decisions, mean 1.98 of 4
+         aim ................... uniform across all 15 bins
+
+       So round one opens with the Mirror shooting, reloading and turning at
+       random. That is what an empty brain looks like through a sampled decoder:
+       it has the keys and no information about when to press any of them.
+
+       IT DOES NOT LAST A ROUND. The policy trains while you play, so the coin
+       flip is shaped within seconds. Measured over 60 s against a cadence cap of
+       316 shots, with the only difference being what the player did:
+
+         player never fires .... 6 shots   (1.9% of cap), per 5 s: 3 1 1 0 0 0 0 0 0 0 1 0
+         player fires steadily . 56 shots  (17.7% of cap), per 5 s: 5 9 14 6 0 0 0 0 0 5 15 2
+
+       Nine times the trigger discipline from the same starting weights, decided
+       entirely by the teacher. The randomness is the first MOMENTS, not the
+       first round, and what replaces it is you.
+
+       (A reload lockout was suspected of throttling the opening instead — a
+       0.5-per-frame reload sample against an 1150 ms dwell. Measured at 5.8% and
+       11.5% of frames locked. It is not the cause; the trigger being taught is.) */
     w3: new Float32Array(NET.H2 * NET.OUT),
     b3: new Float32Array(NET.OUT),
     h1: new Float32Array(NET.H1), h2: new Float32Array(NET.H2),
