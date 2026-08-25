@@ -241,6 +241,30 @@ export function setMode(g, mode) {
   }
 }
 
+/* BACK ON YOUR FEET, SAME ROUND.
+ *
+ * Dying used to be a soft-lock. `newRoom()` is the only thing that clears
+ * `you.dead`, it runs on a round advance or a stalemate, the round cannot
+ * advance while the Mirror is alive, and the stalemate breaker resets its own
+ * timer on every frame that `g.you.dead` is set -- so neither could ever fire.
+ * Measured: killed at round 1 with the Mirror alive, then a hundred seconds of
+ * play, and the body never got up. The fight carried on around a corpse and the
+ * only way out was Start Over, which throws the session back to round 1 and
+ * takes the model's whole history with it.
+ *
+ * The round still does not end by itself, which is the rule: this waits for the
+ * player, keeps the round number, and keeps everything the Mirror has learned.
+ */
+export function reviveRound(g) {
+  if (!g.you.dead) return false;
+  g.reroll = (g.reroll || 0) + 1;   /* or it respawns into the same trap */
+  g.roundStartedAt = g.now;
+  g.deadlockSince = g.now;
+  endLife(g.A);                     /* that life is over, however it ended */
+  newRoom(g, true);
+  return true;
+}
+
 export function restart(g) {
   /* START OVER MEANS A NEW WORLD, not the same one again. Keeping the seed made
      "start over" a retry of a room you had just learned, which is the opposite

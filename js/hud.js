@@ -20,15 +20,21 @@
  */
 import { FOE, WORLD, MAG } from './config.js';
 import { tok, mixHex, rgba, fitCanvas, clamp, hex2rgb } from './util.js';
-import { RAYS, RAY_MAX, OBS, NET, ACT, sig, agentScore } from './agent.js';
+import { RAYS, RAY_MAX, OBS, NET, RNET, ACT, sig, agentScore } from './agent.js';
 import { rehearsalView } from './practice.js';
 import { CAST, dim, INK, iso, isoBox, isoPlate, isoFit,
          obl, oblBox, oblPlate, oblFit } from './viz3d.js';
 
 const $ = (id) => document.getElementById(id);
 const WORLDX = WORLD.AX, WORLDZ = WORLD.AZ;
+/* EVERY PARAMETER THE MODEL HAS, INCLUDING THE RELOAD'S OWN NET. The reload
+   was moved off the shared trunk onto its own 36 -> 16 -> 1 net, and a count
+   that only walked the trunk would under-report the model by 609 and quietly
+   make the panel a lie. Audit criterion AI-04 compares this figure against the
+   arrays, so the two cannot drift apart. */
 const WEIGHTS = NET.IN * NET.H1 + NET.H1 + NET.H1 * NET.H2 + NET.H2 +
-                NET.H2 * NET.OUT + NET.OUT;
+                NET.H2 * NET.OUT + NET.OUT +
+                OBS * RNET.H + RNET.H + RNET.H + 1;
 
 export function initHud() {
   const b = $('brainN'); if (b) b.textContent = WEIGHTS.toLocaleString() + ' weights';

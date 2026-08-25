@@ -5,7 +5,7 @@
  */
 import { WORLD, MODEL, CAM, MAG } from './config.js';
 import { clamp, tok, rgba, fitCanvas } from './util.js';
-import { createGame, step, shoot, reload, restart, setMode } from './sim.js';
+import { createGame, step, shoot, reload, restart, reviveRound, setMode } from './sim.js';
 import { rehearsalBusy, stepRehearsal } from './practice.js';
 import {
   cam, setCamera, project, screenToGround, drawFloor, pushWallsAndProps,
@@ -373,7 +373,22 @@ function drainEvents() {
         hud.banner('Round ' + game.round, st2, 3200);
       }
     } else if (e.kind === 'death') {
-      hud.toast('The Mirror got you', e.leads ? 'it aimed where you were going' : 'it aimed where you were', 1800);
+      /* A SHEET, NOT A TOAST. A toast let the round carry on around a body that
+         nothing could revive -- see reviveRound() in sim.js. The round still
+         does not end on its own; it waits here until you say go. */
+      hud.showSheet({
+        kick: 'the Mirror got you',
+        said: e.leads ? 'it aimed where you were going' : 'it aimed where you were',
+        note: 'Round ' + game.round + ' is still yours to win. Everything it has '
+            + 'learned stays with it — this is a fresh arena, not a fresh start.',
+        stats: [
+          ['it has become you', Math.round(hud.becomeYou(agentScore(game.A)).become * 100) + '%'],
+          ['this round', 'still round ' + game.round],
+        ],
+        cta: 'Get back up',
+        onGo: () => { reviveRound(game); togglePause(false); view.focus(); },
+        hold: true,
+      });
     } else if (e.kind === 'over') {
       const list = listNoticed();
       hud.showSheet({

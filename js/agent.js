@@ -268,6 +268,9 @@ const AIM_S = 1.0;
    advantage a policy gradient is just "do more of whatever preceded a reward",
    which is the version that was tried here and measurably made things worse. */
 export const VAL = ACT;                    /* index of the value output */
+/* the reload's own net: 36 -> 16 -> 1, 609 parameters. Kept beside NET so a
+   count of the model reads both. */
+export const RNET = { H: 16 };
 export const NET = { IN: OBS, H1: 64, H2: 64, OUT: ACT + 1,
                      LR: 0.012, WD: 0.0004, BUF: 4096, STEPS: 6 };
 
@@ -331,6 +334,32 @@ export function makeAgent(seed) {
        11.5% of frames locked. It is not the cause; the trigger being taught is.) */
     w3: new Float32Array(NET.H2 * NET.OUT),
     b3: new Float32Array(NET.OUT),
+    /* A SEPARATE BRAIN FOR THE RELOAD, and the reason is measured.
+       The reload head used to sit on the shared trunk with the keys, the aim
+       and the trigger. The trunk carries the magazine perfectly well -- it
+       responds to it about as strongly as to line-of-sight, which the trigger
+       uses -- but the reload head never learned to read it. It learned HOW
+       OFTEN the player reloads and never WHEN, so the Mirror emptied its
+       magazine and then stood there. Eight variants were tried on the shared
+       trunk (retroactive labelling of the pre-reload window, rarity weighting
+       at 12x and 40x, a direct one-weight path from the magazine, masking
+       frames where a reload was impossible, and the pairwise combinations) and
+       none of them produced any conditioning at all.
+       Giving it its own small net, reading the observation directly, did.
+       Six seeds, baseline against this:
+         conditioning     1.06x (1.00-1.48)  ->  3.28x (2.66-4.39)
+         wait when empty  57.7 s             ->  9.8 s
+         life spent empty 62.7%              ->  44.7%
+       The ranges do not overlap on the first, which is the one that says it is
+       reloading BECAUSE it is empty rather than on a timer it copied.
+       It is an improvement and not a cure: 44.7% is still a lot of standing
+       about, and the player's own demonstration is perfectly conditional
+       (never when full, 0.66% of frames when empty). See dev_log/HANDOFF.md
+       section 57 and dev_log/audit/probe-reload.html. */
+    rw1: Float32Array.from({ length: OBS * RNET.H }, () => (rnd() * 2 - 1) * 0.35),
+    rb1: new Float32Array(RNET.H),
+    rw2: new Float32Array(RNET.H), rb2: 0,
+    rh: new Float32Array(RNET.H),
     h1: new Float32Array(NET.H1), h2: new Float32Array(NET.H2),
     out: new Float32Array(NET.OUT),
     bx: new Float32Array(NET.BUF * OBS), by: new Float32Array(NET.BUF * ACT),
@@ -408,6 +437,14 @@ export function forwardAgent(p, x) {
     for (let j = 0; j < NET.H2; j++) s += p.w3[o + j] * p.h2[j];
     p.out[k] = s;
   }
+  /* the reload does not read the trunk at all; see makeAgent */
+  { let z = p.rb2;
+    for (let j = 0; j < RNET.H; j++) {
+      let a = p.rb1[j], o = j * OBS;
+      for (let i = 0; i < OBS; i++) a += p.rw1[o + i] * x[i];
+      p.rh[j] = Math.tanh(a); z += p.rw2[j] * p.rh[j];
+    }
+    p.out[RELOAD] = z; }
   return p.out;
 }
 
@@ -482,6 +519,19 @@ function stepOne(p, x, y) {
     err[k] = sig(e[k]) - y[k];         /* d(BCE)/d(logit) is exactly this */
   }
   err[RELOAD] = sig(e[RELOAD]) - y[RELOAD];
+  /* ...and it is trained on its own, so the shared trunk gets no reload
+     gradient. That is the point: the reload is no longer competing with three
+     louder heads for the same hidden layers. */
+  { const gO = clamp(err[RELOAD], -4, 4);
+    for (let j = 0; j < RNET.H; j++) {
+      const gh = gO * p.rw2[j] * (1 - p.rh[j] * p.rh[j]);
+      p.rw2[j] -= NET.LR * gO * p.rh[j];
+      p.rb1[j] -= NET.LR * gh;
+      const o = j * OBS;
+      for (let i = 0; i < OBS; i++) p.rw1[o + i] -= NET.LR * gh * x[i];
+    }
+    p.rb2 -= NET.LR * gO;
+    err[RELOAD] = 0; }
   err[VAL] = 0;                        /* imitation says nothing about value */
   err[VAL] = 0;                        /* imitation has no opinion about value */
   /* WEIGHTING THE DECISION FRAMES WAS TRIED AND MEASURED WORSE. The reasoning
