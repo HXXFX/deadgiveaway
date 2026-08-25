@@ -1,0 +1,646 @@
+/*
+ * Dead Giveaway.
+ *
+ * WHERE TO CHANGE THINGS
+ *   the look .............. this file
+ *   every tunable number .. js/config.js   (one source of truth, on purpose)
+ *   what a panel draws .... js/hud.js
+ *   the arena render ...... js/render.js
+ *
+ * TYPE — .hm is the house voice.
+ * The reference sets everything in a heavy, leaning, all-caps face with a HARD
+ * OFFSET SHADOW and no soft edges anywhere. There is no webfont here on purpose:
+ * a font file is a dependency that must download before the title can be read,
+ * so the effect is carried by weight, skew, tracking and a stepped shadow. If a
+ * real display face is ever bundled it goes in --display and this all inherits.
+ *
+ * CONTRAST MEASURED against --panel-2 #25143c, the ground the card text actually
+ * sits on — measuring against the darker --panel once hid --ink-3 sitting at
+ * 4.43, under the floor:
+ *   --ink 15.2:1  --ink-2 11.1:1  --ink-3 7.7:1  --hot 4.9:1  --cool 11.1:1
+ *   --acid 13.2:1  --track 3.3:1 (non-text)
+ * Floor is 4.5:1 for text and 3:1 for non-text.
+ *
+ * COLOUR CARRIES MEANING AND IS NOT FREE:
+ *   --hot = IT   --cool = YOU   --acid = what it knows about you
+ *   --warm = neither (pause, start over)
+ * Nothing decorative may use the first three.
+ */
+:root{
+  --bg:#0a0410; --panel:#1c0f2e; --panel-2:#25143c;
+  --line:#3c1d5e; --raise:#5b2d8a; --track:#7a63a0;
+  /* --ink-3 CARRIES ALMOST EVERY SMALL LABEL IN THIS APP, and at #a48fc2 it
+     measured 5.9:1 on the card ground — over the 4.5 floor, but that floor is
+     for body text at comfortable sizes, not for eleven-pixel uppercase tracked
+     out to .18em, which is the hardest thing to read on the whole screen. It is
+     lifted to 7.4:1, and --ink-2 with it, so the two still read as a hierarchy.
+     Nothing here is decorative grey any more. */
+  --ink:#f7f0ff; --ink-2:#d8ccec; --ink-3:#b9a8d2;
+  --hot:#ff2d95; --cool:#21e6ff; --acid:#f5e663; --good:#3ef2a0;
+  --warm:#ff7a29;
+  --shadow:#12061c;
+
+  --stage:#0d0618; --floor:#3d2340; --floor2:#472a4a; --grid:#5a3560;
+  --wall:#150c1e; --blood:#9f121d; --body:#f4eeff;
+  /* BLOOD GOT BRIGHTER WHEN THE FLOORS DID. At #8d1236 it sat at luminance
+     0.064, which was a bright stain on a floor at 0.026 and an invisible one on
+     a floor at 0.050 — measured at 1.03:1 against the new banking hall. The
+     reference's blood is arterial, not dried, so it goes UP rather than the
+     floors coming back down: 1.4:1 or better on the darkest tile of all nine
+     venues, and 156 RGB units clear of --hot. */
+  /* Five venue colours, not three. With three, a bar, an arcade and an office
+     were all the same blue and the only thing telling them apart was the
+     furniture — which is the half of the signal that is hardest to read from
+     the camera this game uses. Both new ones are at least 90 RGB units from
+     --hot, --cool and --acid so they can never be mistaken for the marks that
+     carry meaning, and every one is capped under the actors at draw time. */
+  --prop-a:#d94f2b; --prop-b:#2fb87a; --prop-c:#2a9fd6;
+  --prop-d:#8a63d2; --prop-e:#c9a227;
+
+  --mono: ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace;
+  /* CONDENSED FIRST, and that reorder is most of the difference.
+     Arial Black led this list, and Arial Black is a WIDE face — it is the one
+     thing the reference's lettering is not. Haettenschweiler and Impact are
+     both extremely narrow, both ship with Windows, and both are far closer to a
+     drawn poster letter than anything a browser will synthesise. Arial Black
+     stays at the back as the fallback for machines that have neither, where the
+     scaleX below does the condensing instead.
+     No webfont, still: a font file is a dependency that has to download before
+     the title can be read, and this game is on screen before anything finishes
+     loading. */
+  /* IMPACT FIRST, not Haettenschweiler. Haettenschweiler is narrower than Impact
+     and its counters — the holes in the O, the R, the 0 — very nearly close on
+     their own. Put a shadow behind it and they close completely, which is what
+     turned the logo, ROUND 6, PAUSED and 0% into stripes. Impact is the poster
+     face this look actually comes from: heavy and narrow, with counters that
+     survive being sat on. */
+  --display:"Impact","Haettenschweiler","Franklin Gothic Heavy",
+            "Arial Black",system-ui,sans-serif;
+  /* raised a step across the board: 10px uppercase at .18em tracking is a
+     label you decode rather than read, and this app is mostly labels */
+  --fs-body:13px; --fs-small:12px; --fs-label:12px; --fs-micro:11px;
+  /* The deck was 172px, which left each canvas about 80px of drawing height —
+     enough for a shape, not enough for a shape WITH LABELS, and unlabelled
+     charts were the thing that read as decoration. 210px gives every deck
+     canvas ~118px, measured, which is what the axis text needs. */
+  --bar-h:56px; --rail-w:308px; --deck-h:210px; --dock-h:54px;
+}
+*{box-sizing:border-box}
+[hidden]{display:none !important}
+html,body{height:100%;margin:0;overflow:hidden}
+body{background:var(--bg);color:var(--ink);
+     font:13px/1.5 var(--mono);-webkit-font-smoothing:antialiased}
+kbd{background:#3a2b4c;border:1px solid var(--raise);border-bottom-width:2px;
+    border-radius:4px;padding:0 5px;font:inherit;font-size:var(--fs-small);color:var(--ink)}
+
+/* Closer to the reference: heavier, tighter, condensed by a horizontal squash,
+   and a THREE-STEP shadow that ends in a magenta ghost — the reference's letters
+   sit on a hard dark step with a coloured fringe rather than on a soft blur.
+   scaleX condenses without needing a condensed face to exist on the machine,
+   which is the whole reason there is no webfont here. */
+/* ONE HARD STEP. Nothing else.
+ *
+ * This had nine shadow layers, a cyan offset up and to the left, negative
+ * tracking and an 0.88 horizontal squash on top of a face that is already one of
+ * the narrowest ever cut. Every one of those decisions was defensible alone and
+ * together they filled in the counters and closed the gaps between letters:
+ * the logo, ROUND 6, PAUSED and 0% were unreadable on screen.
+ *
+ * What the reference actually does is far simpler — a heavy narrow letter, set
+ * solid, sitting on ONE hard offset shadow. The weight is in the face, not in
+ * the effects piled behind it. No squash (the face is the condensation), tracking
+ * slightly POSITIVE so letters stay separate, and a lean rather than a topple. */
+.hm{font-family:var(--display);font-weight:900;text-transform:uppercase;
+    letter-spacing:.012em;display:inline-block;
+    transform:skewX(-9deg);
+    /* EM, NOT PX. A fixed 3px step is a tenth of a 28px cap and a twentieth of a
+       66px one, so one number cannot be right for both: at the small end the
+       shadow swallowed the letter and at the large end it vanished. */
+    text-shadow:.085em .085em 0 var(--shadow)}
+/* THE BIGGEST TYPE GETS A SECOND STEP, in magenta, and that is the whole of it.
+   A misregistered colour ghost is the reference's signature, but it belongs
+   BEHIND the letter where it reads as bad printing — not in front of it and not
+   on both sides, which reads as a blur. */
+.hm-lg{
+    text-shadow:
+      .09em .09em 0 var(--shadow),
+      .17em .17em 0 rgba(255,45,149,.5)}
+
+/* ---- THE LAYOUT ENGINE ---------------------------------------------------
+ *
+ * Every panel here is a live readout of something happening right now, so a
+ * panel that is off the screen or clipped in half is worse than one that is not
+ * there: it is a number the player half-reads. The old grid was two fixed
+ * measurements — a 308px rail and a 210px deck — with `overflow:hidden` under
+ * them, which on a narrow window quietly cut the panels off, and on a wide one
+ * left the rail the same size it had been on a laptop.
+ *
+ * Three rules replace them:
+ *
+ *   FLUID BOUNDS, NOT FIXED ONES. The rail and the deck are clamped to a range
+ *   with a viewport-relative middle, so they grow with the window and stop
+ *   before they eat the arena.
+ *
+ *   THE DECK REFLOWS ITSELF. auto-fit over a minimum column width means three
+ *   panels become two and then one as the window narrows, without a breakpoint
+ *   being written for each step.
+ *
+ *   AND WHEN IT NO LONGER FITS, IT MOVES rather than being cropped. Under
+ *   980px the rail stops being a column beside the arena and becomes a row of
+ *   panels beneath it; the whole shell scrolls as one page instead of six
+ *   little clipped boxes.
+ */
+:root{
+  --rail-w:clamp(258px, 23vw, 360px);
+  --deck-h:clamp(158px, 21vh, 240px);
+}
+.app{display:grid;
+     grid-template-columns:minmax(0,1fr) var(--rail-w);
+     grid-template-rows:var(--bar-h) minmax(0,1fr) var(--deck-h) var(--dock-h);
+     height:100%}
+
+/* ---- top bar ------------------------------------------------------------ */
+.bar{grid-column:1 / -1;grid-row:1;position:relative;display:flex;align-items:center;
+     padding:0 14px;background:var(--panel);border-bottom:3px solid var(--hot)}
+.mark{display:flex;align-items:center;gap:10px;color:var(--ink);text-decoration:none}
+.mark span{font-size:28px;letter-spacing:.01em}
+.mark:hover{color:var(--hot)}
+.mark:focus-visible{outline:2px solid var(--hot);outline-offset:3px}
+.bar-right{margin-left:auto}
+
+.status{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+        display:flex;align-items:center;gap:14px;white-space:nowrap}
+.st-round{font-size:26px;letter-spacing:.02em;color:var(--ink)}
+/* the two vitals readouts: a label and a small canvas each, and nothing else.
+   What is inside them is drawn in hud.js so it can share the arena's language.
+   THE CANVAS MUST HAVE A CSS SIZE — see fitCanvas in util.js. */
+.st-side{display:flex;align-items:center;gap:8px}
+.st-side b{font-size:var(--fs-micro);font-weight:700;letter-spacing:.2em;
+  text-transform:uppercase;color:var(--ink-3)}
+#sideYou b{color:var(--cool)}
+#sideFoe b{color:var(--hot)}
+/* wider and taller: three drops and twenty cartridges need the room, and at
+   seventeen pixels the shapes were smaller than their own outlines */
+.st-vit{display:block;width:150px;height:24px;flex:none}
+.st-sep{width:4px;height:24px;background:var(--hot);transform:skewX(-9deg)}
+.st-safe{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--acid);background:var(--panel-2);
+  box-shadow:inset 0 0 0 2px var(--acid);
+  border-radius:0;padding:4px 9px;font-variant-numeric:tabular-nums;
+  transform:skewX(-9deg)}
+
+/* BUTTONS ARE BLOCKS. The reference has no rounded corners, no borders that are
+   a shade of the background, and no small grey type: it has slabs of saturated
+   colour with heavy skewed lettering sitting on a hard shadow. Every control in
+   this app is now one of those, which is the difference between a game with a
+   toolbar attached and a game. */
+button{font-family:var(--display);font-weight:900;font-size:14px;letter-spacing:.05em;
+  text-transform:uppercase;background:var(--panel-2);color:var(--ink);
+  border:0;border-radius:0;padding:11px 16px;cursor:pointer;line-height:1;
+  transform:skewX(-9deg);box-shadow:3px 3px 0 var(--shadow);
+  transition:transform .08s,box-shadow .08s}
+button > *{display:inline-block;transform:skewX(9deg)}
+button:hover:not(:disabled){box-shadow:5px 5px 0 var(--shadow);transform:skewX(-9deg) translate(-1px,-1px)}
+button:active:not(:disabled){box-shadow:1px 1px 0 var(--shadow);transform:skewX(-9deg) translate(2px,2px)}
+button:focus-visible{outline:3px solid var(--acid);outline-offset:3px}
+button:disabled{opacity:.4;cursor:default;box-shadow:none}
+/* THE COLOUR SYSTEM, SAID ONCE.
+   cyan --cool  = YOU: your health, your bars, your ground mark, your ghost.
+   pink --hot   = THE MIRROR: its health, its shots, its misses, its body count.
+   acid --acid  = WHAT IT KNOWS: every learning panel, the guess mark, the meter.
+   orange --warm= the system: pause, start over, things that are neither of you.
+   green --good / orange --warm = SIGNED DATA inside charts (+/-), so that plus
+   and minus can never be mistaken for you and it. A pressed VIEW toggle goes
+   ink-white: a camera is nobody's colour. */
+button[aria-pressed="true"]:not(:disabled){background:var(--ink);color:#160a1e}
+/* the Mirror's own controls: how many bodies carry it */
+button.foe{background:var(--panel-2);color:var(--hot);
+  outline:2px solid var(--hot);outline-offset:-2px}
+button.foe[aria-pressed="true"]:not(:disabled){background:var(--hot);color:#160a1e}
+/* yours: the ghost that stands in for you */
+button.you{background:var(--panel-2);color:var(--cool);
+  outline:2px solid var(--cool);outline-offset:-2px}
+button.you[aria-pressed="true"]:not(:disabled){background:var(--cool);color:#04212a}
+button.ghosty{background:transparent;box-shadow:none;color:var(--ink-2);
+  outline:2px solid var(--line);outline-offset:-2px}
+button.ghosty:hover:not(:disabled){color:var(--hot);outline-color:var(--hot);
+  box-shadow:none;transform:skewX(-9deg)}
+/* Pause and Start over are neither IT nor YOU, so they take the one colour that
+   means neither — and they sit together, away from the play controls. */
+button.warm{background:var(--warm);color:#1d0d02}
+button.warm:hover:not(:disabled){filter:brightness(1.12)}
+button.alt{background:var(--panel-2);color:var(--acid);
+  outline:2px solid var(--acid);outline-offset:-2px}
+button.alt[aria-pressed="true"]:not(:disabled){background:var(--panel);color:var(--acid);
+  box-shadow:inset 0 0 0 2px var(--acid),3px 3px 0 var(--shadow)}
+.seg{display:inline-flex;gap:2px}
+.seg button{box-shadow:3px 3px 0 var(--shadow)}
+
+/* ---- info popover -------------------------------------------------------- */
+.pop{position:absolute;right:12px;top:calc(100% + 6px);z-index:40;width:350px;
+     background:var(--panel-2);border:0;border-top:4px solid var(--hot);border-radius:0;
+     padding:15px 17px;box-shadow:8px 8px 0 var(--shadow),0 14px 34px rgba(0,0,0,.6)}
+.pop h3{margin:0 0 9px;font-size:22px}
+.pop h4{margin:13px 0 4px;font-size:var(--fs-micro);letter-spacing:.18em;
+        text-transform:uppercase;color:var(--ink-3);font-weight:700}
+.pop p{margin:0;font-size:var(--fs-small);line-height:1.62;color:var(--ink-2)}
+.pop em{font-style:normal;color:var(--acid);font-weight:700}
+.poplink{color:var(--cool);font-weight:700;text-underline-offset:3px}
+.poplink:hover{color:var(--hot)}
+.pop-plate{margin-top:15px;padding-top:11px;border-top:1px solid var(--line);
+  font-size:var(--fs-micro);letter-spacing:.09em;color:var(--ink-3);
+  text-align:center;line-height:1.9}
+
+/* THE PLATE IS ONE STAMP, NOT A SENTENCE WITH LINKS IN IT. Both an underline
+   and a brighter link colour were tried and rejected: either one cuts a single
+   marking into three pieces. The links inherit the plate grey and stay invisible
+   until hover or focus; the pointer cursor does the rest. */
+.pop-plate a{color:inherit;text-decoration:none}
+.pop-plate a:hover{color:var(--ink)}
+.pop-plate a:focus-visible{color:var(--ink);outline:1px solid var(--cool);outline-offset:2px}
+
+
+/* ---- stage -------------------------------------------------------------- */
+.stage{grid-column:1;grid-row:2;position:relative;background:#05020a;overflow:hidden;
+  /* the room the tube sits in, so the bulge has somewhere to bulge into */
+  padding:10px 12px}
+
+/* ---- the tube ------------------------------------------------------------
+ * A curved picture wants three things a flat one does not: geometry that bends,
+ * light that falls off toward the corners, and the scan structure of a screen
+ * that drew its image one line at a time. The bend is the SVG filter; the other
+ * two are painted over the top and cost nothing per frame.
+ */
+.tube{position:absolute;inset:10px 12px;overflow:hidden;
+  border-radius:22px/16px;
+  background:var(--stage);
+  box-shadow:0 0 0 2px #1b1026, 0 0 0 7px #0b0512,
+             0 14px 34px rgba(0,0,0,.75),
+             inset 0 0 60px rgba(0,0,0,.55);
+  filter:url(#crtBend)}
+.tube > canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+
+/* the scan structure. Two layers: fine horizontal lines for the raster, and a
+   very slow vertical sweep for the refresh — both are pinned so they cannot be
+   mistaken for anything the game is drawing. */
+.scan{position:absolute;inset:0;pointer-events:none;z-index:3;
+  background:repeating-linear-gradient(to bottom,
+    rgba(0,0,0,.22) 0px, rgba(0,0,0,.22) 1px,
+    rgba(0,0,0,0) 1px, rgba(0,0,0,0) 3px);
+  mix-blend-mode:multiply;opacity:.55}
+
+/* the glass: corner falloff, and the sheen of a tube lit from the front */
+.glass{position:absolute;inset:0;pointer-events:none;z-index:4;
+  background:
+    radial-gradient(120% 130% at 50% 44%,
+      rgba(0,0,0,0) 52%, rgba(0,0,0,.30) 82%, rgba(0,0,0,.62) 100%),
+    radial-gradient(60% 40% at 28% 10%,
+      rgba(255,255,255,.055) 0%, rgba(255,255,255,0) 70%)}
+
+@media (prefers-reduced-motion:reduce){.scan{opacity:.3}}
+.stage canvas#view{display:block;width:100%;height:100%;outline:none;cursor:crosshair}
+.stage::after{content:'';position:absolute;inset:0;pointer-events:none;z-index:5;
+  background:repeating-linear-gradient(0deg,rgba(0,0,0,.24) 0 1px,transparent 1px 3px)}
+
+.gizmo{position:absolute;right:12px;top:12px;z-index:6;
+  display:flex;flex-direction:column;align-items:center;gap:5px;
+  background:var(--panel);border:0;border-radius:0;
+  box-shadow:4px 4px 0 var(--shadow);padding:7px}
+.gizmo canvas{display:block;width:66px;height:66px;cursor:grab}
+.gizmo canvas:active{cursor:grabbing}
+.gz-btns{display:flex;gap:4px}
+.gz-btns button{padding:3px 8px;font-size:11px;line-height:1}
+
+.hint{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);
+  display:flex;gap:15px;z-index:6;pointer-events:none;
+  background:var(--panel);border:0;border-radius:0;box-shadow:4px 4px 0 var(--shadow);
+  padding:8px 15px;font-size:var(--fs-small);color:var(--ink-2);
+  letter-spacing:.05em;transition:opacity .5s,transform .5s}
+.hint.gone{opacity:0;transform:translateX(-50%) translateY(14px)}
+
+/* ---- between-round banner ------------------------------------------------ */
+/* Along the top of the arena, sliding in from the left. It never covers the
+   middle of the floor, which is where the fight is and where the eye already
+   is. */
+.banner{position:absolute;left:0;top:0;z-index:7;max-width:min(74%,760px);
+  display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;
+  padding:9px 20px 9px 16px;
+  /* THE PINK IS AN EDGE NOW, NOT A GROUND. Near-black lettering on saturated
+     magenta measures 6.6:1 and still reads badly — the hue is bright enough to
+     glare and the display face is heavy enough to bloom against it, which is
+     what the player meant by "the black text on the pink pop-up is not
+     readable". The accent does the same job as a bar down the side, and the
+     words sit on the same dark panel as every other piece of text here. */
+  background:linear-gradient(90deg,rgba(28,15,46,.97) 0%,rgba(28,15,46,.97) 62%,rgba(28,15,46,0) 100%);
+  border-left:6px solid var(--hot);
+  color:var(--ink);
+  transform:translateX(-102%);transition:transform .34s cubic-bezier(.2,.9,.25,1)}
+.banner.in{transform:translateX(0)}
+.banner b{font-size:17px;letter-spacing:.01em;white-space:nowrap}
+.banner i{font-style:normal;font-size:var(--fs-small);font-weight:700;
+  letter-spacing:.05em;color:var(--ink-2)}
+.banner i b{font-size:inherit;background:transparent;color:var(--acid);padding:0}
+
+/* the rail panel that carries habits flashes when a new one lands */
+@keyframes noticedFlash{
+  0%{color:var(--acid);box-shadow:inset 0 0 0 2px var(--acid),0 0 0 6px rgba(245,230,99,.22)}
+  100%{color:var(--ink);box-shadow:inset 0 0 0 0 rgba(245,230,99,0),0 0 0 0 rgba(245,230,99,0)}
+}
+.said-sm.flash{animation:noticedFlash 1.5s ease-out}
+
+.toast{position:absolute;left:50%;top:12%;transform:translateX(-50%);z-index:7;
+  background:var(--panel);border:0;border-radius:0;box-shadow:7px 7px 0 var(--shadow);
+  border-left:5px solid var(--hot);
+  padding:12px 26px;text-align:center;pointer-events:none;max-width:80%}
+.toast b{display:block;font-size:30px;letter-spacing:.04em;color:var(--ink)}
+.toast i{display:block;font-style:normal;font-size:var(--fs-small);color:var(--ink-2);
+  margin-top:6px;letter-spacing:.04em}
+
+/* BETWEEN ROUNDS: glass at the foot of the arena, never a blackout. The fight
+   stays visible and running behind it — a full-screen black card between every
+   round is exactly what kills the pace. */
+.sheet{position:absolute;left:0;right:0;bottom:0;z-index:8;
+  display:flex;justify-content:center;padding:0 0 16px;pointer-events:none}
+.sheet-in{background:rgba(24,12,40,.93);border:0;border-top:4px solid var(--hot);
+  border-radius:0;padding:18px 24px;max-width:64ch;pointer-events:auto;
+  box-shadow:0 -6px 0 rgba(0,0,0,.35),0 18px 44px rgba(0,0,0,.6);backdrop-filter:blur(3px)}
+.sheet .kick{font-size:var(--fs-micro);letter-spacing:.36em;text-transform:uppercase;
+  color:var(--hot);font-weight:700}
+.sheet .said{font-size:clamp(24px,3.2vw,40px);line-height:1.04;margin-top:9px;color:var(--ink)}
+.sheet .said u{text-decoration:none;color:var(--acid)}
+.sheet .note{margin-top:10px;font-size:var(--fs-small);color:var(--ink-2);line-height:1.6;max-width:56ch}
+.sheet .stats{display:flex;gap:26px;margin-top:14px;flex-wrap:wrap}
+.sheet .stats div span{display:block;font-size:var(--fs-micro);letter-spacing:.18em;
+  text-transform:uppercase;color:var(--ink-3);font-weight:700}
+.sheet .stats div b{font-family:var(--display);font-size:26px;color:var(--cool);font-weight:900}
+/* the one thing the player is meant to press: their own colour, as an outline
+   and bright lettering rather than a slab of fill with dark type on it */
+.sheet .go{margin-top:16px;font-size:17px;letter-spacing:.02em;
+  background:var(--panel-2);color:var(--cool);
+  box-shadow:inset 0 0 0 2px var(--cool),3px 3px 0 var(--shadow);
+  padding:12px 22px}
+.sheet .go:hover{background:var(--cool);color:#04141c;
+  box-shadow:inset 0 0 0 2px var(--cool),5px 5px 0 var(--shadow)}
+
+.paused{position:absolute;inset:0;z-index:7;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:8px;background:rgba(10,4,16,.62)}
+/* THE SCANLINE HAS TO COME WITH IT. `.stage::after` lays the raster over the
+   arena at z-index 5 and this card sits at 7, so the one piece of type big
+   enough for the effect to read on was the one piece it was not reaching — the
+   player spotted that the paused word was smooth while the same lettering in the
+   rail was striped. Its own overlay, at the same pitch. */
+.paused::after{content:'';position:absolute;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(0deg,rgba(0,0,0,.28) 0 1px,transparent 1px 3px)}
+.paused span{font-size:66px;letter-spacing:.01em;color:var(--ink)}
+.paused i{font-style:normal;font-size:var(--fs-small);color:var(--ink-2);letter-spacing:.08em}
+
+.boot{position:absolute;inset:0;z-index:9;display:flex;align-items:center;justify-content:center;
+  background:var(--stage);color:var(--ink-2);font-size:var(--fs-body);text-align:center;padding:6%}
+.boot code{background:var(--panel-2);padding:1px 5px;border-radius:3px}
+
+/* ---- rail (about YOU) and deck (about THE MODEL) ------------------------- */
+/* NO SCROLLING ANYWHERE. These are live readouts; anything below the fold may as
+   well not exist during a fight. Three panels in the rail, three in the deck,
+   both sized to fit rather than to overflow. */
+/* Full height on the right. Spanning only the stage and deck rows left a dead
+   black rectangle beside the dock, and it cost the live input panel the 54px it
+   most wanted. */
+.rail{grid-column:2;grid-row:2 / span 3;background:var(--panel);
+      border-left:1px solid var(--line);padding:10px;overflow:hidden;
+      display:flex;flex-direction:column;gap:9px}
+.deck{grid-column:1;grid-row:3;background:var(--panel);border-top:1px solid var(--line);
+      padding:10px;display:grid;
+      /* three, then two, then one — decided by the width, not by a breakpoint */
+      grid-template-columns:repeat(auto-fit,minmax(248px,1fr));
+      grid-auto-rows:minmax(0,1fr);gap:9px;overflow:hidden}
+
+/* A PANEL IS A POSTER. Square corners, a hard colour spine down the left, and a
+   heading that is a block of colour with the title punched out of it rather than
+   eleven grey pixels of tracking. */
+.card{background:var(--panel-2);border:0;border-radius:0;position:relative;
+      border-left:4px solid var(--line);
+      padding:0 0 9px;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+/* THE RAIL IS A BUDGET, SO IT IS WRITTEN AS ONE.
+ *
+ * Three panels sharing a fixed column, each with a canvas that will take
+ * whatever it is given. Left to flexbox and content the total came out 25px
+ * over and the instrument — the one panel that was asked to get BIGGER — was
+ * left with the smallest canvas of the three at 160px.
+ *
+ * So the two scenes that are done declare what they need and the instrument
+ * takes the rest. A growing card still needs a floor: `flex:1; min-height:0`
+ * lets it be squeezed to nothing by whatever sits above it, which is how the
+ * ray diagram once ended up thirty-four pixels tall. */
+.rail{overflow-y:auto;overflow-x:hidden}
+.rail .card{flex:0 0 auto}
+.card.grow{flex:1 1 auto;min-height:210px}
+.rail .card:has(#cLoop){flex:0 0 auto;min-height:262px}
+.card > *:not(h2):not(canvas){margin-left:11px;margin-right:11px}
+.card canvas{margin:0 9px}
+/* PANEL LABELS ARE NOT STATEMENTS. The display face is a poster letter: it is
+   condensed until the counters nearly close, which is exactly what you want at
+   thirty pixels and exactly what you do not want at thirteen. Small labels take
+   the mono face, tracked out, which is what they were legible in before the
+   stack changed under them. */
+.card h2{margin:0 0 8px;padding:6px 11px 5px;
+  font-family:var(--mono);font-weight:700;font-size:11px;letter-spacing:.15em;
+  text-transform:uppercase;color:#12061c;background:var(--ink-2);
+  display:flex;align-items:baseline;gap:7px;flex-wrap:wrap}
+/* it sat on the acid heading fill as dark-on-yellow; the heading is dark now,
+   so this has to come up with it or it is invisible rather than merely faint */
+.card h2 .hint-i{color:var(--ink-3);opacity:.72;letter-spacing:.08em;font-weight:700;text-transform:uppercase;
+  font-size:10px}
+/* the panels about YOU are spined in --cool, the ones about the MODEL in --acid */
+.rail .card{border-left-color:var(--cool)}
+/* EVERY LEARNING PANEL IS ACID, rail and deck alike. The rail was cyan and the
+   deck yellow, which looked like a code and decoded to nothing - both rows are
+   the same thing, the Mirror's knowledge, and now they wear the same colour. */
+.rail .card h2{background:transparent;color:var(--acid);
+  border-bottom:2px solid var(--acid)}
+.deck .card{border-left-color:var(--acid)}
+.deck .card h2{background:transparent;color:var(--acid);
+  border-bottom:2px solid var(--acid)}
+/* the same scanline the arena has, so the panels belong to the same screen */
+.card::after{content:'';position:absolute;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(0deg,rgba(0,0,0,.16) 0 1px,transparent 1px 3px)}
+.card canvas{display:block;width:100%;flex:1;min-height:0}
+.cap{margin:7px 0 0;font-size:var(--fs-small);line-height:1.5;color:var(--ink-2)}
+/* line-height 1 clipped the ascenders of a condensed face, which have further
+   to go than Arial Black's did */
+/* A CONDENSED POSTER FACE HAS TALLER ASCENDERS THAN THE BOX A BROWSER GIVES IT,
+   and the card clips its overflow, so line-height 1 sliced the top off every
+   digit. The extra leading is for the glyphs; the padding is for the cyan edge
+   the .hm-lg treatment throws two pixels up and to the left. */
+.big{font-size:54px;line-height:1.2;padding:4px 0 0 2px;color:var(--acid);
+  font-variant-numeric:tabular-nums}
+.meter{height:13px;background:var(--track);border-radius:0;overflow:hidden;margin-top:9px}
+.meter i{display:block;height:100%;width:0;
+  /* the meter measures KNOWLEDGE, so it is acid - a cyan-to-pink sweep read as
+     "you turning into it", which is evocative and wrong */
+  background:var(--acid)}
+/* the two figures need a stage, not a strip */
+/* the bench carries the whole panel now — the scene, the dial and the three
+   component gauges — so it gets the height the meters used to take */
+.knows canvas{flex:none;display:block;width:calc(100% - 22px);height:150px;
+  margin:9px 11px 0}
+.knows .meter{margin-left:11px;margin-right:11px}
+
+/* The number and the switch, on one baseline. `align-items:baseline` and not
+   center: the chip is a caption to the number, and centring it against a 54px
+   cap height floats it in the middle of nowhere. */
+.know-row{display:flex;align-items:baseline;gap:11px;flex-wrap:wrap}
+.know-use{font-family:var(--mono);font-size:11px;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;white-space:nowrap;
+  padding:4px 8px;color:var(--ink-2);background:var(--panel-2);
+  outline:2px solid var(--track);outline-offset:-2px;
+  transform:skewX(-9deg)}
+/* Acid means WHAT IT KNOWS ABOUT YOU everywhere else in this app, so the chip
+   goes acid only when that knowledge is actually reaching the enemy's aim. */
+.know-use[data-on="1"]{color:var(--acid);background:var(--panel-2);
+  outline-color:var(--acid);box-shadow:inset 0 0 0 2px var(--acid),3px 3px 0 var(--shadow)}
+/* Negative is a real state — the correction is making the guess worse — and it
+   is not an acid state. */
+.big.neg{color:var(--ink-2)}
+.said-sm{font-size:var(--fs-body);line-height:1.55;color:var(--ink);font-weight:700}
+
+/* YOU AND IT, ON THE SAME AXIS. Two bars per row sharing one scale, because the
+   claim being made is a comparison and a comparison drawn on two scales is not
+   one. --cool is you and --hot is it, the same as everywhere else on screen. */
+.cmp{display:grid;gap:7px;margin-top:3px}
+.cmp-row{display:grid;grid-template-columns:74px 1fr;gap:9px;align-items:center}
+.cmp-lab{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--ink-3);line-height:1.15}
+.cmp-bars{display:grid;gap:3px}
+.cmp-bar{height:9px;background:var(--track);position:relative}
+.cmp-bar i{display:block;height:100%;width:0;transition:width .28s ease-out}
+.cmp-bar.you i{background:var(--cool)}
+.cmp-bar.it  i{background:var(--hot)}
+/* the gap between the two bars IS the finding, so it gets a mark of its own */
+.cmp-row.near .cmp-lab{color:var(--ink-2)}
+.said-sm b{color:var(--acid)}
+
+/* ---- dock ---------------------------------------------------------------- */
+.dock{grid-column:1;grid-row:4;display:flex;align-items:center;justify-content:center;
+  gap:11px;background:var(--panel);border-top:3px solid var(--hot)}
+.dock-gap{width:26px}
+
+/* THE RAIL USED TO BE DELETED UNDER 900px — `display:none`, four live readouts
+   gone, on the machines least able to spare them. It moves now; see the layout
+   engine at the top. The hint bar still sheds its later items, because those are
+   instructions read once and not readouts read continuously. */
+@media (max-width:1180px){
+  .hint span:nth-child(n+5){display:none}
+}
+@media (prefers-reduced-motion: reduce){ .hint{transition:none} }
+
+/* ---- the session report -------------------------------------------------- */
+/* Over everything, because it is read rather than played with, and the arena
+   behind it is a distraction while you are reading a number off it. */
+.rpt{position:fixed;inset:0;z-index:60;background:rgba(10,4,16,.93);
+  display:flex;align-items:center;justify-content:center;padding:22px}
+.rpt[hidden]{display:none}
+.rpt-box{background:var(--panel);width:min(980px,100%);max-height:100%;
+  display:flex;flex-direction:column;outline:3px solid var(--acid);outline-offset:-3px;
+  box-shadow:10px 10px 0 var(--shadow)}
+.rpt-bar{display:flex;align-items:center;gap:11px;padding:11px 13px;
+  background:var(--panel-2);border-bottom:2px solid var(--acid);flex:0 0 auto}
+.rpt-bar h2{margin:0;font-size:22px;color:var(--acid);flex:0 0 auto}
+.rpt-note{font-family:var(--mono);font-size:var(--fs-micro);font-weight:700;color:var(--ink-3);
+  letter-spacing:.06em;text-transform:uppercase;flex:1 1 auto}
+.rpt-bar button{flex:0 0 auto}
+/* the text itself: monospace and NOT wrapped — the tables in it are aligned by
+   spaces, and wrapping turns every one of them into rubble */
+.rpt pre{margin:0;padding:15px 17px;overflow:auto;font-family:var(--mono);
+  font-size:12px;line-height:1.5;color:var(--ink);white-space:pre;
+  background:var(--panel);flex:1 1 auto}
+
+/* ---- the become-you decomposition ---------------------------------------- */
+.bky{display:grid;gap:5px;margin:9px 11px 2px}
+.bky > div{display:grid;grid-template-columns:96px 1fr 34px;gap:8px;align-items:center}
+.bky span{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--ink-3)}
+.bky b{font-family:var(--mono);font-size:11px;color:var(--ink-2);text-align:right;
+  font-variant-numeric:tabular-nums}
+.meter.mini{height:8px;margin:0;display:block}
+
+
+/* ---- THE REHEARSAL CARD --------------------------------------------------
+   Sits over the arena during the between-round beat and plays back the practice
+   fight the Mirror just had. The pause got longer when the rehearsal landed, and
+   a pause nobody can see the reason for reads as the game hanging. */
+.rehearse {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  display: flex; gap: 14px; align-items: center;
+  padding: 12px 16px; z-index: 40;
+  background: var(--panel); border: 2px solid var(--hot);
+  box-shadow: 6px 6px 0 var(--shadow);
+  animation: rhIn .18s steps(3) both;
+}
+@keyframes rhIn { from { opacity: 0; transform: translate(-50%, -46%); }
+                  to   { opacity: 1; transform: translate(-50%, -50%); } }
+/* AN EXPLICIT CSS SIZE, and it is not decoration. fitCanvas sets
+   canvas.width from getBoundingClientRect times the pixel ratio; a canvas whose
+   only size is its width ATTRIBUTE takes its layout size from that attribute, so
+   the two feed each other — 260 becomes 520 becomes 1040, doubling every frame
+   until a mostly-blank canvas covers the screen. That is the white screen
+   between rounds. Every other canvas in this app is sized in CSS; this one was
+   not. */
+.rehearse canvas {
+  display: block; width: 260px; height: 150px; flex: none;
+  background: var(--bg); border: 1px solid var(--panel-2);
+}
+.rh-txt { display: flex; flex-direction: column; gap: 4px; min-width: 190px; }
+.rh-txt b { font: 900 20px/1 var(--display); color: var(--hot); letter-spacing: .5px; }
+.rh-txt i { font-style: normal; font-size: 12px; color: var(--ink-2); }
+.rh-txt span { font-size: 11px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+
+/* ---- THE RESPONSIVE HALF OF THE LAYOUT ENGINE ----------------------------
+ *
+ * AT THE END OF THE FILE ON PURPOSE. These rules move `.rail` and `.deck` out of
+ * the places their own rules put them, and at equal specificity the later rule
+ * wins — written above those rules, the media query set the row and lost the
+ * column, so the app kept a two-column grid with a zero-width first column and
+ * the arena became a 24-pixel strip down the left-hand edge.
+ */
+
+/* NARROW: the rail stops being a column beside the arena and becomes a row of
+   panels beneath it, and the whole shell scrolls as one page. */
+@media (max-width:980px){
+  .app{grid-template-columns:minmax(0,1fr);
+       grid-template-rows:var(--bar-h) minmax(300px,46vh) auto auto var(--dock-h);
+       height:auto;min-height:100%}
+  html,body{overflow:auto;height:auto}
+  .stage{grid-column:1;grid-row:2;min-height:300px}
+  .deck{grid-column:1;grid-row:3;overflow:visible}
+  .rail{grid-column:1;grid-row:4;border-left:0;border-top:1px solid var(--line);
+        display:grid;grid-template-columns:repeat(auto-fit,minmax(266px,1fr));
+        align-items:start;overflow:visible}
+  .dock{grid-column:1;grid-row:5;flex-wrap:wrap;padding:8px 10px;height:auto}
+  /* A CARD NEEDS A HEIGHT OR ITS CANVAS TAKES ONE. `.card canvas{flex:1}` in a
+     column with no cap grows to whatever the grid will give it, which stacked
+     out to an eight-hundred-pixel deck. */
+  .rail .card,.deck .card{min-height:172px;max-height:270px}
+  .rail .card.grow{flex:0 1 auto}
+}
+
+/* SHORT: a laptop in landscape runs out of height before it runs out of width. */
+@media (max-height:620px) and (min-width:981px){
+  .app{grid-template-rows:var(--bar-h) minmax(0,1fr) clamp(128px,23vh,176px) var(--dock-h)}
+}
+
+/* VERY NARROW: one panel across, and the hint bar is down to the essentials. */
+/* THE HEADER STOPS BEING CENTRED BEFORE IT COLLIDES. `.status` is absolutely
+   positioned at the middle of the bar, which is right until the title reaches
+   it — at 820px "DEAD GIVEAWAY" and "ROUND 1" were printed on top of each
+   other. Below this width it joins the flex row and takes its turn. */
+@media (max-width:1120px){
+  .status{position:static;transform:none;margin-left:auto;margin-right:12px;
+          gap:11px;flex-wrap:wrap;justify-content:flex-end}
+  .bar{gap:10px}
+}
+@media (max-width:560px){
+  .rail{grid-template-columns:minmax(0,1fr)}
+  .mark span{font-size:20px}
+  .status{gap:8px}
+  .st-round{font-size:19px}
+}

@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dead Giveaway — design sheet</title>
+<meta name="description" content="Every character, wall, object and floor graphic in Dead Giveaway, drawn by the game's own renderer.">
+<link rel="icon" href="./favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="./css/app.css">
+<link rel="stylesheet" href="./css/design.css">
+</head>
+<body class="sheetpage">
+
+<header class="dbar">
+  <a class="mark" href="./">
+    <svg viewBox="0 0 100 100" width="44" height="44" aria-hidden="true">
+      <!-- the mark, at a size that holds its own beside the wordmark: the 30px
+           cut read as a pin next to 28px capitals -->
+      <g fill="#9f121d"><path d="M50 22c9-3 19-1 24 5s4 10 9 12 10-1 13 4-1 10-6 12 -4 8-1 13 1 11-5 13-11-2-15 2-3 9-9 10-10-4-15-3-9 5-15 2-5-9-9-12-10-2-12-8 3-9 2-14-6-8-3-14 9-5 12-9 1-10 6-13 10 1 14-1 6-6 10-1z"/><circle cx="18" cy="26" r="5"/><circle cx="86" cy="30" r="4"/><circle cx="80" cy="78" r="5.5"/><circle cx="24" cy="80" r="3.5"/></g>
+      <path d="M32 42 L72 42 L61 35 L21 35 Z" fill="#fff3de"/>
+      <path d="M32 42 L21 35 L21 79 L32 86 Z" fill="#cdb595"/>
+      <rect x="32" y="42" width="40" height="44" fill="#f0dfc0"/>
+      <path d="M44 14 L60 14 L49 7 L33 7 Z" fill="#ffd94d"/>
+      <path d="M44 14 L33 7 L33 35 L44 42 Z" fill="#c1930f"/>
+      <rect x="44" y="14" width="16" height="28" fill="#e8b526"/>
+      <rect x="47" y="24" width="5" height="7" fill="#f0dfc0"/>
+      <path d="M72 56 L94 56 L86 50 L64 50 Z" fill="#ffd94d"/>
+      <path d="M94 56 L94 66 L86 60 L86 50 Z" fill="#c1930f"/>
+      <rect x="72" y="56" width="22" height="10" fill="#e8b526"/>
+      <rect x="58" y="56" width="9" height="9" fill="#1c0f2e"/>
+    </svg>
+    <span class="hm hm-lg">Dead&nbsp;Giveaway</span>
+  </a>
+  <b class="hm dbar-t">design sheet</b>
+  <a class="ghosty-link" href="./">back to the game</a>
+</header>
+
+<!-- OPENED FROM DISK, THIS PAGE IS BLANK AND SAYS NOTHING ABOUT WHY.
+     Browsers refuse to load ES modules over file://, so double-clicking the file
+     gets you unstyled HTML and no swatches. The game's index.html has had a
+     guard like this from the start; the design sheet shipped without one, and
+     the first person to try it got a wall of serif text. -->
+<!-- INLINE STYLES ON PURPOSE. When this message is needed the stylesheets have
+     failed too, for the same reason the modules did, so anything it relies on
+     from app.css would not be there to rely on. -->
+<div id="dboot" hidden style="max-width:44rem;margin:12vh auto;padding:28px 30px;
+     background:#1c0f2e;border-top:5px solid #ff2d95;color:#f7f0ff;
+     font:15px/1.7 ui-monospace,Consolas,monospace">
+  <b style="display:block;font:900 34px/1.1 'Arial Black',Impact,sans-serif;
+     text-transform:uppercase;letter-spacing:-.01em;margin-bottom:14px;
+     text-shadow:3px 3px 0 #12061c,6px 6px 0 rgba(255,45,149,.35)">Open this over http</b>
+  <p style="margin:0 0 12px;color:#c9b6e2">This page is drawn by the game's own code,
+     and browsers refuse to load ES modules from a
+     <code style="color:#f5e663">file://</code> path &mdash; which is what you have if
+     the address bar starts <code style="color:#f5e663">D:/</code> instead of
+     <code style="color:#f5e663">127.0.0.1</code>. The game itself will not open
+     from disk either, for exactly the same reason.</p>
+  <p style="margin:0;color:#c9b6e2">Run <b style="color:#21e6ff">Open.bat</b> in the
+     project folder: the game opens itself, and the design sheet is one click away
+     under <b style="color:#21e6ff">Info</b>. Or run
+     <b style="color:#21e6ff">Open.bat --design</b> to come straight here.</p>
+</div>
+
+<main id="sheet">
+  <section class="dsec intro">
+    <h1 class="hm hm-lg">Everything in the room</h1>
+    <p class="lede big-lede">
+      Every swatch below is drawn by the game's own renderer from the game's own
+      generator — no mock-ups, no screenshots, no redrawing. If something looks
+      wrong here it looks wrong in the arena, and fixing it here fixes it there.
+      Reload the page and the rooms and the casting change, because they do that
+      in the game too.
+    </p>
+    <p class="castline" id="castline"></p>
+  </section>
+</main>
+
+<footer class="dfoot">
+  DEAD GIVEAWAY &middot; <a href="https://windnoise.org" target="_blank" rel="noopener"
+     aria-label="Windnoise (opens in a new tab)">A WINDNOISE SOLUTION</a> &middot;
+  <a href="https://github.com/HXXFX/deadgiveaway" target="_blank" rel="noopener"
+     aria-label="Source repository on GitHub (opens in a new tab)">HXXFX</a><br>
+  &copy; 2026 WINDNOISE &middot; ALL RIGHTS RESERVED
+</footer>
+
+<script>
+  /* If the module never ran, the sheet is still empty a moment later. */
+  window.__sheetBooted = false;
+  setTimeout(function () {
+    if (window.__sheetBooted) return;
+    document.getElementById('dboot').hidden = false;
+    var m = document.getElementById('sheet');
+    if (m) m.hidden = true;
+  }, 1500);
+</script>
+<script type="module" src="./js/design.js"></script>
+</body>
+</html>

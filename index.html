@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dead Giveaway — the Mirror is learning you</title>
+<meta name="description" content="A top-down shooter against the Mirror — a model that learns how you move and fight. Everything it knows about you is on screen while you play.">
+<link rel="icon" href="./favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="./css/app.css">
+</head>
+<body>
+
+<!-- THE GAME IS THE PAGE. No splash, no click-to-play. -->
+<div class="app">
+
+  <header class="bar">
+    <a class="mark" href="./" title="Dead Giveaway — start over (unsaved progress is lost)">
+      <svg viewBox="0 0 100 100" width="44" height="44" aria-hidden="true">
+      <!-- the mark, at a size that holds its own beside the wordmark: the 30px
+           cut read as a pin next to 28px capitals -->
+      <g fill="#9f121d"><path d="M50 22c9-3 19-1 24 5s4 10 9 12 10-1 13 4-1 10-6 12 -4 8-1 13 1 11-5 13-11-2-15 2-3 9-9 10-10-4-15-3-9 5-15 2-5-9-9-12-10-2-12-8 3-9 2-14-6-8-3-14 9-5 12-9 1-10 6-13 10 1 14-1 6-6 10-1z"/><circle cx="18" cy="26" r="5"/><circle cx="86" cy="30" r="4"/><circle cx="80" cy="78" r="5.5"/><circle cx="24" cy="80" r="3.5"/></g>
+      <path d="M32 42 L72 42 L61 35 L21 35 Z" fill="#fff3de"/>
+      <path d="M32 42 L21 35 L21 79 L32 86 Z" fill="#cdb595"/>
+      <rect x="32" y="42" width="40" height="44" fill="#f0dfc0"/>
+      <path d="M44 14 L60 14 L49 7 L33 7 Z" fill="#ffd94d"/>
+      <path d="M44 14 L33 7 L33 35 L44 42 Z" fill="#c1930f"/>
+      <rect x="44" y="14" width="16" height="28" fill="#e8b526"/>
+      <rect x="47" y="24" width="5" height="7" fill="#f0dfc0"/>
+      <path d="M72 56 L94 56 L86 50 L64 50 Z" fill="#ffd94d"/>
+      <path d="M94 56 L94 66 L86 60 L86 50 Z" fill="#c1930f"/>
+      <rect x="72" y="56" width="22" height="10" fill="#e8b526"/>
+      <rect x="58" y="56" width="9" height="9" fill="#1c0f2e"/>
+    </svg>
+      <span class="hm hm-lg">Dead&nbsp;Giveaway</span>
+    </a>
+
+    <div class="status">
+      <span class="st-round hm hm-lg" id="pRound">Round 1</span>
+      <span class="st-sep"></span>
+      <!-- BOTH SIDES, THE SAME READOUT, DRAWN THE SAME WAY. Health as blood in
+           the body and rounds as brass in the magazine, on one small canvas each
+           so they can be lit and stacked like everything else in the arena
+           rather than typed as pips. Equal arms is the premise; the header is
+           where it is either honoured or quietly broken. -->
+      <span class="st-side" id="sideYou">
+        <b>you</b><canvas class="st-vit" id="vitYou" width="300" height="48"></canvas>
+      </span>
+      <span class="st-sep"></span>
+      <span class="st-side st-foe" id="sideFoe">
+        <b>mirror</b><canvas class="st-vit" id="vitFoe" width="300" height="48"></canvas>
+      </span>
+      <span class="st-safe" id="pProtect" hidden>safe 3.0s</span>
+    </div>
+
+    <div class="bar-right">
+      <button class="ghosty" id="btnInfo" aria-expanded="false" aria-controls="infoPop">Info</button>
+    </div>
+
+    <div class="pop" id="infoPop" hidden role="dialog" aria-label="About Dead Giveaway">
+      <h3 class="hm">Dead Giveaway</h3>
+      <p>A top-down shooter whose enemy builds a model of how <em>you</em> move and
+         aims where you are about to be. Every panel around the arena is reading
+         that model live while you play.</p>
+      <h4>Your data</h4>
+      <p>Nothing is uploaded and nothing is stored. The model of you exists only
+         while this tab is open; closing it destroys it. No account, no tracking,
+         no analytics, no network requests at all.</p>
+      <h4>How it is built</h4>
+      <p>Plain ES modules, no framework and no build step. The 3&#8209;D is drawn by
+         hand on a 2&#8209;D canvas and the network is about a hundred lines of
+         arithmetic. Every room is generated from a seed rather than authored.</p>
+      <h4>The design sheet</h4>
+      <p>Every character, wall, object, floor graphic and colour in the game,
+         drawn live by the game's own renderer, with the open design decisions
+         side by side: <a class="poplink" href="./design.html">open the design
+         sheet</a>.</p>
+      <div class="pop-plate">
+        DEAD GIVEAWAY &middot; <a href="https://windnoise.org" target="_blank" rel="noopener"
+     aria-label="Windnoise (opens in a new tab)">A WINDNOISE SOLUTION</a> &middot;
+  <a href="https://github.com/HXXFX/deadgiveaway" target="_blank" rel="noopener"
+     aria-label="Source repository on GitHub (opens in a new tab)">HXXFX</a><br>
+        &copy; 2026 WINDNOISE &middot; ALL RIGHTS RESERVED
+      </div>
+    </div>
+  </header>
+
+  <main class="stage" id="stage">
+    <!-- THE TUBE. A curved picture, scanlines and a darkened corner, because the
+         reference this game is drawn from was made for a screen that bulged.
+         The bend is an SVG displacement filter over the arena canvas only — the
+         panels stay flat and legible — and render.js applies the same curve to
+         the pointer so what you click is what you see. See CRT_K there. -->
+    <div class="tube" id="tube">
+      <canvas id="view" tabindex="0" aria-label="Arena. Move with W A S D. Aim with the mouse. Click to shoot."></canvas>
+      <div class="scan" aria-hidden="true"></div>
+      <div class="glass" aria-hidden="true"></div>
+    </div>
+
+    <!-- TOP RIGHT of the viewport, where a 3-D tool puts it -->
+    <div class="gizmo" id="gizmo" title="Drag to rotate · wheel to zoom · double-click to reset">
+      <canvas id="cube" width="132" height="132"></canvas>
+      <div class="gz-btns">
+        <button id="zIn" title="Zoom in">+</button>
+        <button id="zOut" title="Zoom out">&minus;</button>
+        <button id="zReset" title="Reset the view">&#8634;</button>
+      </div>
+    </div>
+
+    <div class="hint" id="hint">
+      <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move</span>
+      <span>mouse aims</span>
+      <span>click shoots</span>
+      <span><kbd>R</kbd> reloads</span>
+      <span>right&#8209;drag rotates</span>
+      <span><kbd>Space</kbd> pause</span>
+    </div>
+
+    <div class="toast" id="toast" hidden><b class="hm hm-lg" id="toastT"></b><i id="toastS"></i></div>
+
+    <!-- BETWEEN ROUNDS: a strip along the top of the arena, not a card in the
+         middle of it. Read in passing, gone in three seconds, never in the way
+         of the fight it is announcing. -->
+    <div class="banner" id="banner" hidden>
+      <b class="hm" id="bnKick"></b>
+      <i id="bnLine"></i>
+    </div>
+
+    <!-- THE PAUSE, EXPLAINED BY PLAYING IT BACK. The beat between rounds got
+         longer because the Mirror now rehearses in it, and an unexplained pause
+         reads as a stall. This is not a loading animation: it is the actual
+         practice fight it just had against a copy of itself, replayed. -->
+    <div class="rehearse" id="rehearse" hidden>
+      <canvas id="cRehearse" width="260" height="150"></canvas>
+      <div class="rh-txt">
+        <b id="rhKick">REHEARSING</b>
+        <i id="rhLine">fighting a copy of you</i>
+        <span id="rhStat"></span>
+      </div>
+    </div>
+
+    <!-- BETWEEN ROUNDS: a glass card over the live arena, never a black screen.
+         The fight keeps running behind it so the pace is not broken. -->
+    <div class="sheet" id="sheet" hidden>
+      <div class="sheet-in">
+        <div class="kick" id="shKick">the Mirror worked something out</div>
+        <div class="said hm hm-lg" id="shSaid"></div>
+        <div class="note" id="shNote"></div>
+        <div class="stats" id="shStats"></div>
+        <button class="go hm" id="shGo">Continue</button>
+      </div>
+    </div>
+
+    <div class="paused" id="pausedVeil" hidden>
+      <span class="hm hm-lg">Paused</span><i>press Space or the button below</i>
+    </div>
+
+    <div class="boot" id="boot"><span>Starting the arena&hellip;</span></div>
+  </main>
+
+  <!-- RIGHT RAIL: the three panels about YOU. Sized to fit, never scrolls. -->
+  <aside class="rail">
+    <section class="card knows">
+      <h2>How much it has become you</h2>
+      <!-- THE NUMBER IS AN EDGE, NOT A SCORE. Each of the three parts below is
+           how far past a control the policy got - a control that needed no
+           learning at all. A bar without its control is decoration, and an
+           earlier version of this panel awarded 79% to a test player with no
+           movement style, because the number under it was paying out for the
+           fact that a moving body keeps moving. -->
+      <div class="know-row">
+        <div class="big hm hm-lg" id="knowNum">0%</div>
+        <span class="know-use" id="knowUse" data-on="0">still watching</span>
+      </div>
+      <!-- THE BENCH. Everything this panel knows, on one surface: your mask,
+           the copy being made of it filling to the score, the dial reading the
+           same score, and the three components as gauges along the front.
+           The meter and the three small meters that used to be here are gone —
+           they were these three numbers a second time, which is a panel arguing
+           with itself. See drawKnow in hud.js. -->
+      <canvas id="cKnow" height="300"></canvas>
+      <!-- WHAT IT LAST WORKED OUT, which used to be a card of its own titled
+           "Where it came from" holding one sentence. That was a hundred pixels
+           of panel for a line of prose, in a rail that was pushing the ray
+           diagram down to thirty-four pixels — and the player had asked for
+           less text and more picture in the same breath. It belongs here
+           anyway: it is the caption to this number. -->
+      <div class="said-sm" id="noticed">Nothing yet. It has an empty brain &mdash;
+        move, shoot, and it copies what it sees.</div>
+    </section>
+
+    <section class="card">
+      <h2>Its controls <span class="hint-i" id="copyN">no lessons yet</span></h2>
+      <canvas id="cLoop" height="200"></canvas>
+      <p class="cap" id="cmpCap">It has the same keyboard, the same mouse and the
+        same view of the map as you.</p>
+    </section>
+
+    <section class="card grow">
+      <h2>What it sees <span class="hint-i" id="senseN">numbers, live</span></h2>
+      <canvas id="cSense"></canvas>
+    </section>
+  </aside>
+
+  <!-- BOTTOM PANEL: the three panels about THE MODEL, side by side so nothing
+       has to be scrolled to. Real-time information cannot live below the fold. -->
+  <!-- BOTTOM PANEL: the model itself, side by side so nothing has to be
+       scrolled to. Real-time information cannot live below the fold. -->
+  <div class="deck">
+    <section class="card">
+      <h2>What it took off you <span class="hint-i">against a control</span></h2>
+      <canvas id="cMiss"></canvas>
+      <p class="cap" id="missCap">Each bar is how far past something that learned
+        nothing it got. Zero means no better than the obvious answer.</p>
+    </section>
+    <section class="card">
+      <h2>The policy <span class="hint-i" id="brainN"></span></h2>
+      <canvas id="cBrain"></canvas>
+      <p class="cap">What it is given, two hidden layers, and the six decisions it
+        makes. Live. There is no second model anywhere.</p>
+    </section>
+    <section class="card">
+      <h2>The ledger</h2>
+      <canvas id="cSpark"></canvas>
+      <p class="cap">Frames of you watched, and the kills the whole thing turns on.</p>
+    </section>
+  </div>
+
+  <div class="dock">
+    <!-- THREE CONTROLS LEFT ON THE PLAYER'S CALL. First-person was a second
+         camera to maintain for a game that is read from above; "Mirror's guess"
+         drew a prediction the rebuilt policy no longer makes, so the button did
+         nothing; and the crowd toggle argued with the premise — this is you
+         against the best version of yourself, and there is one of you. It is
+         always a duel now. -->
+    <button id="btnWatch" class="you" aria-pressed="false">Watch it fight itself</button>
+    <button id="btnReport" class="alt"
+            title="Everything this session measured, in text you can read and paste.">Report</button>
+    <span class="dock-gap"></span>
+    <button id="btnPause" class="warm">Pause</button>
+    <button id="btnReset" class="warm">Start over</button>
+  </div>
+
+<!-- THE REPORT. Plain text on purpose: it can be read here, selected, and pasted
+     straight into a conversation. A chart cannot be pasted, and the whole point
+     of this panel is that what happened in a real session reaches whoever is
+     fixing it. -->
+<div class="rpt" id="rpt" hidden role="dialog" aria-modal="true" aria-label="Session report">
+  <div class="rpt-box">
+    <div class="rpt-bar">
+      <h2 class="hm">Session report</h2>
+      <span class="rpt-note" id="rptNote"></span>
+      <button id="rptCopy" class="alt">Copy</button>
+      <button id="rptClose" class="warm">Close</button>
+    </div>
+    <pre id="rptText"></pre>
+  </div>
+</div>
+</div>
+
+<script>
+  window.__booted = false;
+  setTimeout(function () {
+    if (window.__booted) return;
+    var b = document.getElementById('boot');
+    if (b) b.innerHTML = '<span>The game did not start. This page needs to be served ' +
+      'over http, not opened from disk &mdash; run <code>Open.bat</code>, ' +
+      'or check the browser console.</span>';
+  }, 4000);
+</script>
+<script type="module" src="./js/main.js"></script>
+<!-- The displacement map is generated once at startup from the same constant
+     the pointer correction uses, so the picture and the mouse cannot drift. -->
+<svg class="crtdefs" aria-hidden="true" width="0" height="0">
+  <filter id="crtBend" x="0%" y="0%" width="100%" height="100%"
+          color-interpolation-filters="sRGB">
+    <feImage id="crtMap" preserveAspectRatio="none" result="map"></feImage>
+    <feDisplacementMap in="SourceGraphic" in2="map" id="crtDisp"
+                       xChannelSelector="R" yChannelSelector="G"></feDisplacementMap>
+  </filter>
+</svg>
+</body>
+</html>
