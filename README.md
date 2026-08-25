@@ -39,7 +39,9 @@ its behaviour is now yours, and where it is still guessing.
 | `Space` | pause |
 
 Twenty rounds to a magazine. It reloads on the same key and the same timer you
-do, and it had to learn when.
+do, and it had to learn when — from you, habit and all. Reload only when the
+gun runs dry and it will fight down to the last round; top up early to feel
+safe and it will do that instead.
 
 ## Your data
 
