@@ -989,6 +989,17 @@ export function reload(g, who) {
   if (who.ammo >= MAG.size) return false;         /* nothing to gain */
   who.reloadUntil = g.now + MAG.reloadMs;
   who.reloadFrom = g.now;
+  /* THE LESSON IS RECORDED HERE, NOT AT THE KEYBOARD.
+     `youReloaded` used to be set only by main.js's keydown handler, so a reload
+     that reached the player by any other route taught the model nothing. Every
+     harness that drives the simulation directly -- this project's probes, its QC
+     runner, its red team -- therefore taught `reload = 0` on every single frame
+     and measured a model that had never seen one demonstration. Days of analysis
+     were built on that before it was noticed, and it is the second time a
+     main.js-only code path has silently emptied a measurement (the first was the
+     trigger; see dev_log/redteam/README.md).
+     Setting it where the reload actually happens makes every caller correct. */
+  if (who === g.you) g.youReloaded = true;
   const side = (who === g.you || who === g.ghost) ? 1 : -1;
   g.mags.push({
     x: who.x - who.hx * 0.25 + who.hz * 0.30 * side,

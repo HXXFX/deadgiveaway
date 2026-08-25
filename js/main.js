@@ -109,8 +109,9 @@ addEventListener('keydown', (e) => {
      running is not a lesson, it is a keypress. */
   if (k === 'r' || k === 'e') {
     e.preventDefault();
-    if (!game.paused && game.mode === 'play' && reload(game, game.you))
-      game.youReloaded = true;
+    /* reload() records the lesson itself now, so every caller teaches it and
+       not just this one. See the note in sim.js reload(). */
+    if (!game.paused && game.mode === 'play') reload(game, game.you);
     return;
   }
   if (!MOVE.has(k)) return;
