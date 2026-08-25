@@ -711,6 +711,39 @@ export function learn(p, x, y) {
   p.posW = clamp((1 - p.fireRate) / Math.max(0.004, p.fireRate), 1, 12);
 
   p.bx.set(x, p.head * OBS); p.by.set(y, p.head * ACT);
+  /* A RELOAD IS AN EVENT; THE LESSON HAS TO BE A STATE.
+   *
+   * The press is one frame. Taught as one frame among hundreds, the head can
+   * only learn the RATE at which reloads happen — and at convergence that is
+   * exactly what it did learn: measured live at 930,000 lessons, P(reload) was
+   * 6e-6 whether the magazine was full or empty, an expected 45 MINUTES of
+   * standing on an empty gun. 42,111 dry clicks against 27 reloads. "It never
+   * reloads" was literal, and the more it learned the worse it got, because
+   * converging on the marginal rate is the imitation working correctly on the
+   * wrong target.
+   *
+   * So when the player presses reload, the frames they just spent on a LOW
+   * MAGAZINE — the state their press answered — are relabelled as wanting the
+   * reload too. This invents nothing: it only ever amplifies a reload the
+   * player actually performed into the state that caused it, and a player who
+   * never reloads never labels anything. The threshold is ~4 rounds (0.21 of a
+   * 20-round magazine), the window is capped at 90 frames, and the walk stops
+   * at the refill boundary of the previous reload because those frames sit
+   * above the threshold.
+   *
+   * Measured, 6 seeds, deterministic instrument, against a dry-style teacher:
+   * life spent empty 50.3% -> 0.0%, dry clicks 597 -> 0, and the conditioning
+   * ratio P(reload|empty)/P(reload|full) went from 2.4 to ~160,000 — it
+   * reloads BECAUSE it is empty, categorically. Wiring the rehearsal's PPO
+   * into the reload net was measured in the same sweep and did nothing (0 of
+   * 6 seeds better); the reload stays imitation-only. */
+  if (y[RELOAD] > 0.5) {
+    for (let b = 1; b <= 90 && b < p.n; b++) {
+      const i = (p.head - 1 - b + NET.BUF * 2) % NET.BUF;
+      if (p.bx[i * OBS + 34] > 0.21) break;
+      p.by[i * ACT + RELOAD] = 1;
+    }
+  }
   p.head = (p.head + 1) % NET.BUF;
   p.n = Math.min(p.n + 1, NET.BUF);
   if (p.n < 60) return;
