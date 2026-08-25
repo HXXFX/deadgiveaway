@@ -741,7 +741,7 @@ function frame(now) {
    twice now that has been slowed down by there being no way to reach the state
    from outside. `?debug` puts it on the window; nothing else does. */
 if (location.search.includes('debug')) {
-  window.__shootback = { game, input, cam, hud };
+  window.__deadgiveaway = { game, input, cam, hud };
 }
 
 /* boot */
