@@ -228,6 +228,21 @@ export function report(L, g) {
     row('range', yRange ? yRange.toFixed(1) : '—', fRange.toFixed(1), ' m', 'where they shoot from');
     row('pre-fire', (yb * 100).toFixed(0) + '%', (ib * 100).toFixed(0) + '%', '',
         'shots with no line — it does this only if you do');
+    /* THE MAGAZINE, FOR BOTH HANDS. Added after a player reported the Mirror
+       "not knowing how to reload any more" at round fifteen — which was true and
+       which nothing here reported. It is measured, so it is shown. */
+    const aliveF = g.stats.foeAliveFrames || 0;
+    const emptyPct = aliveF ? Math.round(100 * (g.stats.foeEmptyFrames || 0) / aliveF) : 0;
+    row('empty', '—', emptyPct + '%', '', 'of its life with nothing in the magazine');
+    row('dry', (L.you.dry || 0), (g.stats.foeDry || 0), '', 'trigger pulled on an empty gun');
+    if (emptyPct >= 40) {
+      line('');
+      line('  IT IS STARVING. It spends most of its life unable to shoot. The reload');
+      line('  is a control it holds and does not use: it reloads at a rate it copied');
+      line('  from you rather than because its magazine is empty, so it empties and');
+      line('  then waits. This gets WORSE the longer you play — an untrained policy');
+      line('  reloads constantly and is never empty for long.');
+    }
   }
   line('');
   line('  SAME WEAPON, BOTH HANDS. Both rounds travel at the same speed, stop at');

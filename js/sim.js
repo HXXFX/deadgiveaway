@@ -112,7 +112,8 @@ export function createGame(seed) {
     showGhost: false,
     pred: [0, 0],
     events: [],           /* consumed by the UI: {kind, ...} */
-    stats: { shotsFired: 0, hitsTaken: 0, foeShots: 0, foeHits: 0, foeReloads: 0, foeDry: 0 },
+    stats: { shotsFired: 0, hitsTaken: 0, foeShots: 0, foeHits: 0, foeReloads: 0,
+             foeDry: 0, foeEmptyFrames: 0, foeAliveFrames: 0 },
   };
   g.look = castFor(g.seed);
   newRoom(g, true);
@@ -250,7 +251,13 @@ export function restart(g) {
   g.mode = 'play'; g.ghost = null; g.watchUnlocked = false;
   g.self = makeSelf();
   g.roundStartedAt = g.now; g.reroll = 0;
-  g.stats = { shotsFired: 0, hitsTaken: 0, foeShots: 0, foeHits: 0 };
+  /* EVERY FIELD, OR THE ONES LEFT OUT ARE SILENTLY DESTROYED. This reset
+     omitted foeReloads and foeDry, so the two counters that describe whether
+     the Mirror can use its magazine were wiped on every Start Over and the
+     session report could never have shown them even if it had asked. Keep
+     this in step with the literal in createGame. */
+  g.stats = { shotsFired: 0, hitsTaken: 0, foeShots: 0, foeHits: 0,
+              foeReloads: 0, foeDry: 0, foeEmptyFrames: 0, foeAliveFrames: 0 };
   newRoom(g, false);
 }
 
@@ -471,6 +478,13 @@ export function step(g, input, dtMs) {
        by dev_log/audit AI-06, dragging its measured rate down and walking
        the trigger bias exactly the way the paragraph above says it must not.
        The comment was right; the predicate was one term short. */
+    /* HOW MUCH OF ITS LIFE IT SPENDS UNABLE TO SHOOT. Counted because the
+       player found the Mirror starving on an empty magazine after fifteen
+       rounds and NOTHING IN THE APP MEASURED IT -- every panel scores hands,
+       aim and trigger, so the one channel that broke was the only one with no
+       readout. A number nobody displays cannot be noticed going wrong. */
+    g.stats.foeAliveFrames = (g.stats.foeAliveFrames || 0) + 1;
+    if ((f.ammo || 0) <= 0) g.stats.foeEmptyFrames = (g.stats.foeEmptyFrames || 0) + 1;
     const couldFire = (f.ammo || 0) > 0 && !(f.reloadUntil > g.now)
                       && (g.now - (f.lastShot || 0)) >= PLAYER.fireEvery;
     if (couldFire) noteFired(g.A, fired, lineNow);
