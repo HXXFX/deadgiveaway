@@ -33,7 +33,7 @@
  * at sixty frames a second.
  */
 import { createGame, step, shoot, applyKeys } from './sim.js';
-import { WORLD, PLAYER, FOE } from './config.js';
+import { WORLD, PLAYER, FOE, MAG } from './config.js';
 import { blocked } from './room.js';
 import { see, act, ppoBatch, studyBeat, PPO, OBS } from './agent.js';
 
@@ -227,8 +227,16 @@ function oneFrame(L) {
   /* THE OPPONENT: the frozen clone of the player, in the player's body, playing
      through the same controls and the same shoot() as everything else. */
   const youLine = !blocked(g.room, g.you.x, g.you.z, f.x, f.z);
+  /* THE MAGAZINE AND THE OTHER BODY'S CONDITION, both of which this call used
+     to leave out entirely. Omitted, `see` defaults them to full and unhurt, so
+     every frame of every rehearsal trained the policy on a world where nobody
+     ever runs dry, reloads, or is nearly dead -- while the live game feeds it
+     the real numbers. Training on one distribution and running on another is
+     the oldest way to make a policy worse and have nothing look wrong. */
   see(L.obsYou, g.room, g.you, f, youLine, g.self.losOpen, g.self.sinceFire,
-      g.self.threat, A.noVel);
+      g.self.threat, A.noVel,
+      { ammo: (g.you.ammo || 0) / MAG.size, reloading: g.you.reloadUntil > g.now },
+      { hp: (f.hp || 0) / (f.maxHp || FOE.hp), ammo: (f.ammo || 0) / MAG.size });
   const ya = act(A.opp, L.obsYou, g.youKeys, R, L.i);
   g.youKeys = ya.keys;
   L.input.keys.clear();
@@ -243,7 +251,9 @@ function oneFrame(L) {
   const itLine = !blocked(g.room, f.x, f.z, g.you.x, g.you.z);
   f.losT = itLine ? (f.losT || 0) + DT : 0;
   see(L.obsIt, g.room, f, g.you, itLine, f.losT,
-      (g.now - (f.lastShot || 0)) / 1000, [0, 0, 0], A.noVel);
+      (g.now - (f.lastShot || 0)) / 1000, [0, 0, 0], A.noVel,
+      { ammo: (f.ammo || 0) / MAG.size, reloading: f.reloadUntil > g.now },
+      { hp: (g.you.hp || 0) / PLAYER.hp, ammo: (g.you.ammo || 0) / MAG.size });
   const ia = act(A, L.obsIt, f.keys, R, L.i);
   f.keys = ia.keys;
   const t = roll.n++;
@@ -346,7 +356,10 @@ export function stepRehearsal(budgetMs) {
       if (lf && !pg.you.dead) {
         const ll = !blocked(pg.room, lf.x, lf.z, pg.you.x, pg.you.z);
         see(L.obsIt, pg.room, lf, pg.you, ll, lf.losT || 0,
-            (pg.now - (lf.lastShot || 0)) / 1000, [0, 0, 0], A.noVel);
+            (pg.now - (lf.lastShot || 0)) / 1000, [0, 0, 0], A.noVel,
+            { ammo: (lf.ammo || 0) / MAG.size, reloading: lf.reloadUntil > pg.now },
+            { hp: (pg.you.hp || 0) / PLAYER.hp,
+              ammo: (pg.you.ammo || 0) / MAG.size });
         lastV = act(A, L.obsIt, lf.keys, R, L.i).value;
       }
       L.total = 0;

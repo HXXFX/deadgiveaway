@@ -358,7 +358,11 @@ export function step(g, input, dtMs) {
            out, where all it has is what it was holding a frame ago. The Mirror's
            side was right all along - f.keys IS last frame's. */
         g.self.losOpen, g.self.sinceFire, g.self.threat, g.A.noVel,
-        { ammo: (g.you.ammo || 0) / MAG.size, reloading: g.you.reloadUntil > g.now });
+        { ammo: (g.you.ammo || 0) / MAG.size, reloading: g.you.reloadUntil > g.now },
+        /* AND WHAT THE OTHER BODY HAS LEFT -- the same two facts the header shows the
+           player without their having to learn anything. */
+        nf0 ? { hp: (nf0.hp || 0) / ((nf0.maxHp) || FOE.hp),
+                ammo: (nf0.ammo || 0) / MAG.size } : null);
   }
 
   /* --- the human (or the ghost standing in) --------------------------- */
@@ -473,7 +477,11 @@ export function step(g, input, dtMs) {
        for position, as the ones it was taught on. */
     see(g.obsIt, g.room, f, target, lineNow, f.losT,
         (g.now - (f.lastShot || 0)) / 1000, threatTo(g, f, true), g.A.noVel,
-        { ammo: (f.ammo || 0) / MAG.size, reloading: f.reloadUntil > g.now });
+        { ammo: (f.ammo || 0) / MAG.size, reloading: f.reloadUntil > g.now },
+        /* AND WHAT THE OTHER BODY HAS LEFT -- the same two facts the header shows the
+           player without their having to learn anything. */
+        target ? { hp: (target.hp || 0) / PLAYER.hp,
+                   ammo: (target.ammo || 0) / MAG.size } : null);
     if (!f.keys) f.keys = new Set();
     /* THE REHEARSAL DRIVES THIS BODY ITSELF. practice.js samples the action,
        records the log-probability it had, and applies it — so step() must not
@@ -850,7 +858,11 @@ function moveGhost(g, DT) {
   gh.losT = line ? (gh.losT || 0) + DT : 0;
   see(g.obsIt, g.room, gh, foe, line, gh.losT,
       (g.now - (gh.lastShot || 0)) / 1000, threatTo(g, gh, false), g.A.noVel,
-        { ammo: (gh.ammo || 0) / MAG.size, reloading: gh.reloadUntil > g.now });
+        { ammo: (gh.ammo || 0) / MAG.size, reloading: gh.reloadUntil > g.now },
+        /* AND WHAT THE OTHER BODY HAS LEFT -- the same two facts the header shows the
+           player without their having to learn anything. */
+        foe ? { hp: (foe.hp || 0) / ((foe.maxHp) || FOE.hp),
+               ammo: (foe.ammo || 0) / MAG.size } : null);
   if (!gh.keys) gh.keys = new Set();
   const a = act(g.A, g.obsIt, gh.keys, g.rnd, g.frameN || 0);
   gh.keys = a.keys;

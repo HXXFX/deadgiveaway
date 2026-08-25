@@ -81,7 +81,18 @@ export const RAY_MAX = 20;       /* metres; past this the room is "open" */
    from a full one, and "when do you reload" is not a question it could answer
    even in principle — it would be copying a decision whose cause it cannot see.
    [34] rounds left as a fraction, [35] 1 while reloading. */
-export const OBS = 36;
+/* 38, and the last two are the fairness fix.
+ *
+ * Until now this vector held the other body's POSITION and VELOCITY and nothing
+ * about its CONDITION, while the player's own header showed the Mirror's health
+ * and its magazine. So one side could see how close the other was to dying and
+ * whether it was about to run dry, and the other could not -- a one-directional
+ * advantage in a game whose whole subject is symmetry, and a bigger one than the
+ * reticle colour that led to it being noticed.
+ *
+ * Levelling UP rather than down: both sides now know the same things, rather
+ * than the player being made blinder to match. */
+export const OBS = 38;
 /* one life, held back until it can be scored: sixty seconds is longer than any
    life measured in a session, so nothing is lost by being generous here */
 const LIFE_BUF = 3600;
@@ -142,7 +153,7 @@ for (let i = 0; i < RAYS; i++) {
    is the whole reason the policy transfers: the Mirror asks this with itself as
    `me` and you as `foe`, and gets a vector shaped exactly like the ones it was
    trained on. */
-export function see(out, room, me, foe, lineClear, losFor, sinceFire, threat, noVel, mag) {
+export function see(out, room, me, foe, lineClear, losFor, sinceFire, threat, noVel, mag, foeCond) {
   for (let i = 0; i < RAYS; i++)
     out[i] = rayDist(room, me.x, me.z, RAY_DX[i], RAY_DZ[i]) / RAY_MAX;
   const dx = foe ? foe.x - me.x : 0, dz = foe ? foe.z - me.z : 0;
@@ -183,6 +194,12 @@ export function see(out, room, me, foe, lineClear, losFor, sinceFire, threat, no
      unchanged by any reflection of the room. */
   out[34] = mag ? clamp(mag.ammo, 0, 1) : 1;
   out[35] = mag && mag.reloading ? 1 : 0;
+  /* WHAT THE OTHER BODY HAS LEFT. The player reads both of these off the header
+     without having to learn anything; this is the same two facts, raw, for the
+     side that does. Defaults to "unhurt and loaded" so a caller that cannot
+     supply them is guessing high rather than seeing a phantom weakness. */
+  out[36] = foeCond ? clamp(foeCond.hp, 0, 1) : 1;
+  out[37] = foeCond ? clamp(foeCond.ammo, 0, 1) : 1;
   out[33] = clamp(Math.atan2(me.hx * dz - me.hz * dx,
                              me.hx * dx + me.hz * dz) * 3, -1, 1);
   return out;
@@ -485,6 +502,11 @@ function reflect(r, x, y) {
   rx[33] = x[33] * (r.fx * r.fz > 0 ? 1 : -1);
   /* how full the magazine is does not care which way the room was flipped */
   rx[34] = x[34]; rx[35] = x[35];
+  /* neither the other body's health nor its magazine cares which way the room
+     was flipped. MISSING THESE WOULD BE SILENT: three of every four training
+     samples are a reflection, so the two new inputs would arrive as zero on
+     75% of the data and read as 'dead and empty' rather than 'unknown'. */
+  rx[36] = x[36]; rx[37] = x[37];
   /* W is -z and S is +z, A is -x and D is +x, so a flip swaps the pair */
   ry[0] = r.fz > 0 ? y[0] : y[2];
   ry[2] = r.fz > 0 ? y[2] : y[0];
