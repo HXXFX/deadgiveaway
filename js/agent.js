@@ -298,10 +298,18 @@ export function makeAgent(seed) {
 
        Measured on a fresh policy over 20,000 frames (dev_log/audit/probe-coldstart.html):
 
-         fired ................. 50.2% of frames
-         reloaded .............. 49.2% of frames
+         chose to fire ......... 50.2% of frames
+         chose to reload ....... 49.2% of frames
          held >= 1 key ......... 93.8% of decisions, mean 1.98 of 4
          aim ................... uniform across all 15 bins
+
+       Those first two are DECISIONS, not events. shoot() still caps the trigger
+       at one round per PLAYER.fireEvery and refuses on an empty magazine, and
+       reload() refuses when the magazine is full or a reload is already running.
+       So it tries to fire on half of all frames and succeeds far less often. The
+       93.8% is exactly 1 - 0.5^4, which is what four independent coin flips give,
+       and is the tightest confirmation available that nothing is being learned
+       yet.
 
        So round one opens with the Mirror shooting, reloading and turning at
        random. That is what an empty brain looks like through a sampled decoder:
