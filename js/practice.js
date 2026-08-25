@@ -84,10 +84,31 @@ function makeRoll(n) {
    them a moment ago". */
 function snapshot(p) {
   const c = {};
-  for (const k of ['w1', 'b1', 'w2', 'b2', 'w3', 'b3']) c[k] = p[k].slice();
-  c.h1 = new Float32Array(p.h1.length);
-  c.h2 = new Float32Array(p.h2.length);
-  c.out = new Float32Array(p.out.length);
+  /* EVERY ARRAY BY DISCOVERY, NOT BY A LIST OF NAMES.
+   *
+   * This named six arrays. A seventh, eighth and ninth were added when the
+   * reload was moved onto its own net, and the copy silently did not have them:
+   * forwardAgent read `p.rb1[j]` off undefined and threw on the FIRST FRAME of
+   * the rehearsal, so the game hung on the REHEARSING overlay reading
+   * "0 frames practised" with no error anyone could see. It shipped.
+   *
+   * A hand-written list of fields is a thing to forget, and this is the third
+   * time in this project that adding a field broke a copy or a reset that
+   * enumerated its siblings (see also g.stats in sim.js restart()). Discovering
+   * them cannot be forgotten.
+   *
+   * The replay buffers are excluded on purpose: they are megabytes, they are
+   * training data rather than weights, and a frozen opponent has no use for
+   * them. Scratch arrays are allocated fresh rather than shared, or two bodies
+   * would write over each other's hidden layer inside one frame. */
+  const BUFFERS = new Set(['bx', 'by', 'sx', 'sy', 'lx', 'ly']);
+  const SCRATCH = new Set(['h1', 'h2', 'out', 'rh']);
+  for (const k of Object.keys(p)) {
+    if (!(p[k] instanceof Float32Array) || BUFFERS.has(k)) continue;
+    c[k] = SCRATCH.has(k) ? new Float32Array(p[k].length) : p[k].slice();
+  }
+  /* plain-number weights travel too — the reload net's output bias is one */
+  if (typeof p.rb2 === 'number') c.rb2 = p.rb2;
   /* the readout calibrations travel with the weights, or the copy fights with a
      trigger discipline it never learned */
   for (const k of ['biasLine', 'biasBlind', 'rateYouLine', 'rateYouBlind',

@@ -223,18 +223,31 @@ bWatch.addEventListener('click', () => setWatch(game.mode !== 'watch'));
 /* Pauses on open. Reading a report while the thing it describes carries on
    changing behind it is how you end up quoting a number that has already moved. */
 const rpt = $('rpt');
+let reportPaused = false;
 function showReport() {
   $('rptText').textContent = report(game.log, game);
   const n = game.log.samples.length;
   $('rptNote').textContent = n + ' samples · round ' + game.round;
   rpt.hidden = false;
+  /* REMEMBER WHETHER THE REPORT IS WHAT PAUSED IT, so closing can undo
+     exactly what opening did and nothing more. Opening used to pause and
+     closing did not resume, so reading the report left the game stopped
+     with only the RESUME button to say so -- and between two rounds it also
+     stranded the rehearsal overlay, which looked like a hung game. */
+  reportPaused = !game.paused;
   togglePause(true);
   $('rptClose').focus();
 }
 $('btnReport').addEventListener('click', showReport);
 /* `?report=1` opens it on load, so a still picture of a real one can be taken */
 if (_q.get('report') === '1') setTimeout(showReport, 40);
-$('rptClose').addEventListener('click', () => { rpt.hidden = true; view.focus(); });
+$('rptClose').addEventListener('click', () => {
+  rpt.hidden = true;
+  /* only resume if the report is what stopped it; a game the player paused
+     themselves before opening it stays paused */
+  if (reportPaused) { reportPaused = false; togglePause(false); }
+  view.focus();
+});
 rpt.addEventListener('click', (e) => { if (e.target === rpt) { rpt.hidden = true; view.focus(); } });
 addEventListener('keydown', (e) => {
   if (!rpt.hidden && e.key === 'Escape') { e.preventDefault(); rpt.hidden = true; view.focus(); }
@@ -694,7 +707,22 @@ function frame(now) {
      four milliseconds of it. That is what makes it affordable to rehearse for
      long enough to matter: this beat is no longer stealing from the fight. */
   let rehearsing = false;
-  if (rehearsalBusy() && !game.paused) {
+  /* THE REHEARSAL IS NOT GAMEPLAY, SO PAUSE MUST NOT REACH IT.
+   *
+   * Both branches here used to be gated on `!game.paused`, which meant that
+   * while the game was paused the rehearsal could neither ADVANCE nor be
+   * CLEARED — the overlay sat there reading "0 frames practised" forever and
+   * the game looked dead. Opening the report pauses (see showReport), and so
+   * does the window losing focus, so this was reachable by pressing REPORT
+   * between two rounds. It shipped, and a player found it in six rounds.
+   *
+   * The watchdog below was inside the same gate, so the one thing written to
+   * stop a hung rehearsal could not run during the hang it was there for.
+   *
+   * A rehearsal is a computation with an animation over it, not part of the
+   * fight, so it now runs to completion regardless. `frozen` still holds the
+   * arena still, which is what pause is actually for. */
+  if (rehearsalBusy()) {
     rehearsing = true;
     hud.showRehearsal(game);
     /* leave a few milliseconds for drawing the card at sixty a second */
@@ -705,7 +733,7 @@ function frame(now) {
        the dropped frame — a stutter is recoverable, a locked game is not. */
     if (!rehearseFrom) rehearseFrom = now;
     else if (now - rehearseFrom > 5000) { stepRehearsal(1e9); rehearseFrom = 0; }
-  } else if (!game.paused) {
+  } else {
     rehearseFrom = 0;
     rehearsing = hud.endRehearsal(now);
   }
