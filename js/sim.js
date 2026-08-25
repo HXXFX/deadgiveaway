@@ -753,112 +753,22 @@ export function step(g, input, dtMs) {
   }
 }
 
-/* NAVIGATION, NOT PATHFINDING. Steering straight at a point orbiting the player
- * was fine in one open room. Once the generator started cutting the arena into
- * two or three connected spaces, a foe that only knows "walk towards you" grinds
- * into a wall and stays there: measured over 90 seconds on twelve seeds, five of
- * them never gave the enemy a single frame of line of sight, and a stationary
- * player took zero damage. So when the straight line is blocked, walk to the
- * best doorway it can actually see and decide again from there. One hop, greedy,
- * recomputed every frame, using the door list the generator already has.
+/* THE HAND-WRITTEN NAVIGATION IS GONE, and this note is what is left of it.
+ *
+ * A `steer()` lived here: an orbit ring around the player, plus greedy doorway
+ * routing for when the straight line was blocked. It belonged to the scripted
+ * enemy this game replaced, and NOTHING HAD CALLED IT SINCE. It sat in a public
+ * repository whose own ledger tells the player "there is no orbit, no peek
+ * timer, no routing, no cadence" -- true of what runs, and flatly contradicted
+ * by ninety lines of orbit and routing sitting in the file next to it.
+ *
+ * Dead code that contradicts a claim is worse than dead code: anybody reading
+ * the source to check the claim finds the opposite.
+ *
+ * What replaced it is in agent.js. The policy holds W A S D and decides where
+ * to walk from the same sixteen rays the player sees. If it cannot get round a
+ * wall, it has not learned to yet, and that is the honest state of it.
  */
-function steer(g, f, target, ringR) {
-  const R = ringR || FOE.orbit;
-  const orbit = [target.x + Math.cos(f.ang) * R,
-                 target.z + Math.sin(f.ang) * R];
-  if (!blocked(g.room, f.x, f.z, target.x, target.z)) {
-    f.door = null; f.detourT = 0; f.bestClose = undefined; f.noProg = 0;
-    return orbit;                                   /* a line: nothing to solve */
-  }
-  /* HOW FAR PAST a doorway's wall something is, measured along that wall's own
-     normal. Signed, and deliberately NOT reduced to a side: a foe grinding
-     against the slab is a few centimetres past the centre line and so reads as
-     "already through" if you only look at the sign, which ruled out the only
-     door in the room and left it pacing the same three metres of corridor for
-     the rest of the round. Inside 0.8 m of the wall, nobody is through it. */
-  const past = (w, x, z) => (x - w.x) * w.nx + (z - w.z) * w.nz;
-  const through = (w, x, z) => (Math.abs(past(w, x, z)) < 0.8 ? 0 : Math.sign(past(w, x, z)));
-  /* THE DOOR CHOICE IS STICKY, not the waypoint. Re-deciding every frame at the
-     exact distance where one doorway stops being the cheapest is how a thing
-     ends up vibrating on the spot — measured, the enemy sat 1.2 m from an open
-     door for 90 seconds, flipping between it and one across the map. */
-  /* IF IT IS NOT GETTING ANYWHERE, IT IS WRONG ABOUT THE WAY THROUGH. Straight-
-     line cost cannot tell that a doorway is on the far side of the wall you are
-     already pressed against, and picking one costs nothing to notice and a whole
-     round to sit out. So: no progress for most of a second means the current
-     door is written off for a few seconds and something else gets a turn. This
-     is the only recovery in here, and it covers every way of being stuck rather
-     than the one that was measured. */
-  /* NO PROGRESS IS NOT THE SAME AS NO SPEED, and only the second was measured.
-     On one seed the Mirror spent three minutes sliding up and down the face of
-     a wall at full pelt, its x pinned at 11.6 while the player's sat at 10.0 on
-     the other side — 1.6 m apart, no line, not one shot fired in three minutes,
-     and it happened on EVERY persona including a player who never moved. A
-     recovery that waits for the body to stop never fires for a body that is
-     sprinting sideways. So progress is measured as progress: the closest it has
-     got to you lately, and how long since it beat that. */
-  const closeNow = Math.hypot(target.x - f.x, target.z - f.z);
-  if (f.bestClose === undefined || closeNow < f.bestClose - 0.35) {
-    f.bestClose = closeNow; f.noProg = 0;
-  } else f.noProg = (f.noProg || 0) + WORLD.DT;
-
-  if (Math.hypot(f.vx, f.vz) < 0.5) f.stuck = (f.stuck || 0) + WORLD.DT;
-  else f.stuck = 0;
-  if (f.stuck > 0.8 || f.noProg > 2.5) {
-    f.stuck = 0; f.noProg = 0; f.bestClose = closeNow;
-    if (f.door) { f.avoid = f.door; f.avoidT = g.now + 4000; f.door = null; }
-    else {
-      /* Stuck with no doorway to blame — jammed on the end of a slab, or in the
-         notch between two solids, where every doorway is already on the player's
-         side of its own wall and so gets ruled out. Nothing clever is available
-         here, so: commit to going SIDEWAYS for a second and a bit, alternating
-         hands each time, which is wall-following by the crudest possible means
-         and empties out the last of the arenas where the fight never started. */
-      /* COMMIT TO A HAND. Alternating on every trigger is a body rocking from
-         foot to foot in front of a wall; going the same way three times in a row
-         is what actually gets round one. Only when a hand has been given a fair
-         run does the other get a turn. */
-      const ax = target.x - f.x, az = target.z - f.z, al = Math.hypot(ax, az) || 1;
-      f.handRun = (f.handRun || 0) + 1;
-      if (!f.hand || f.handRun > 3) { f.hand = f.hand === 1 ? -1 : 1; f.handRun = 1; }
-      f.dx = -(az / al) * f.hand; f.dz = (ax / al) * f.hand;
-      f.detourT = g.now + 1800;
-    }
-  }
-  if (f.detourT > g.now) return [f.x + f.dx * 4, f.z + f.dz * 4];
-
-  const done = (w) => { const a = through(w, f.x, f.z);
-                        return a !== 0 && a === through(w, target.x, target.z); };
-  if (!f.door || g.now > f.wpT || done(f.door) ||
-      blocked(g.room, f.x, f.z, f.door.x, f.door.z)) {
-    let best = null, bestCost = Infinity;
-    for (const w of (g.room.doors || [])) {
-      /* a door you are already through is not a way through */
-      if (done(w)) continue;
-      if (w === f.avoid && g.now < f.avoidT) continue;
-      let cost = Math.hypot(w.x - f.x, w.z - f.z) + Math.hypot(target.x - w.x, target.z - w.z);
-      /* NOT SEEING A DOOR IS NOT A REASON NOT TO WALK TOWARDS IT. Standing right
-         beside a wall hides its own doorway — the sight line runs parallel to the
-         slab and clips it — and refusing to route through anything unseen left
-         the enemy pinned against the wall two metres from the gap. Unseen doors
-         are a worse bet, not an impossible one, so they cost more rather than
-         being thrown away. */
-      if (blocked(g.room, f.x, f.z, w.x, w.z)) cost += 9;
-      if (cost < bestCost) { bestCost = cost; best = w; }
-    }
-    f.door = best;
-    f.wpT = g.now + 1200;
-  }
-  /* nothing to route through: press on towards the player, which at least keeps
-     it moving along whatever it is stuck against */
-  if (!f.door) return [target.x, target.z];
-  /* Aim at a point THROUGH the gap, offset along the WALL'S normal. Offsetting
-     towards the player instead put the waypoint back inside the wall whenever
-     the player was roughly in line with the wall, and the enemy then walked into
-     the slab 20 cm short of an open door and stayed there. */
-  const s = Math.sign(past(f.door, target.x, target.z)) || 1;
-  return [f.door.x + f.door.nx * s * 1.5, f.door.z + f.door.nz * s * 1.5];
-}
 
 /* The live enemy nearest an actor, falling back to the first so callers that
    run a frame after the last one dies still get a body to read. */

@@ -73,7 +73,7 @@ export const FOE = {
   dmgEdge: 0.62,     /* within this            -> 1 damage */
   hitRadius: 0.45,   /* MEASURED: 0.8 m forgave every near miss and flattened
                         the difference between a read player and an unread one */
-  orbit: 5.6,
+
 };
 
 export const MODEL = {
