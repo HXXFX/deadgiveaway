@@ -312,7 +312,11 @@ button.alt[aria-pressed="true"]:not(:disabled){background:var(--panel);color:var
       rgba(255,255,255,.055) 0%, rgba(255,255,255,0) 70%)}
 
 @media (prefers-reduced-motion:reduce){.scan{opacity:.3}}
-.stage canvas#view{display:block;width:100%;height:100%;outline:none;cursor:crosshair}
+/* THE GAME DRAWS ITS OWN POINTER, so the system one is turned off here. If
+   drawReticle ever stops running, this leaves the player with no pointer at
+   all -- which is the correct failure to have, because it is impossible to
+   miss, unlike two pointers slightly apart. */
+.stage canvas#view{display:block;width:100%;height:100%;outline:none;cursor:none}
 .stage::after{content:'';position:absolute;inset:0;pointer-events:none;z-index:5;
   background:repeating-linear-gradient(0deg,rgba(0,0,0,.24) 0 1px,transparent 1px 3px)}
 
@@ -658,92 +662,3 @@ button.alt[aria-pressed="true"]:not(:disabled){background:var(--panel);color:var
   .status{gap:8px}
   .st-round{font-size:19px}
 }
-
-/* ======================================================================
-   THE FACE OF THE TUBE — the whole window behind curved glass.
-   ======================================================================
-
-   THE CURVE IS IN THE GLASS AND NOT IN THE CONTENT, and that is a
-   correctness decision rather than a taste one.
-
-   A CSS filter is not part of layout. Measured: a box displaced 60,40 by a
-   filter still reports its original rect and is NOT hit where it appears; the
-   same displacement by a transform moves the rect with it and the click lands.
-   So bending the app itself would put every button somewhere other than where
-   it is pressed — worst in the corners, which is where Info lives, and at the
-   curve used here that would have been about thirty pixels.
-
-   This layer has pointer-events:none and nothing clickable in it, so it can
-   take the whole curve for free. The eye reads a tube from a bowed raster far
-   more than from bent text, so this is the stronger effect as well as the
-   cheaper one.
-   ====================================================================== */
-
-.crtface{position:fixed;inset:0;z-index:55;pointer-events:none;
-  /* the barrel, built from the window in buildCrtMap() */
-  filter:url(#crtFace);
-  background:
-    /* the raster. HEAVY ON PURPOSE: a barrel thins these toward the edges, and
-       a line weighted to read correctly flat disappears in the corners once it
-       is curved. */
-    repeating-linear-gradient(0deg,
-      rgba(0,0,0,.34) 0 1px, rgba(0,0,0,0) 1px 3px),
-    /* the grille: vertical RGB triads, faint enough to be a texture rather
-       than a colour cast */
-    repeating-linear-gradient(90deg,
-      rgba(255,0,60,.055) 0 1px,
-      rgba(0,255,120,.055) 1px 2px,
-      rgba(60,120,255,.055) 2px 3px),
-    /* the corner falloff of a curved face */
-    radial-gradient(118% 128% at 50% 45%,
-      rgba(0,0,0,0) 50%, rgba(0,0,0,.30) 82%, rgba(0,0,0,.72) 100%),
-    /* and the sheen of a tube lit from in front and to the left */
-    radial-gradient(56% 36% at 27% 9%,
-      rgba(255,255,255,.06) 0%, rgba(255,255,255,0) 72%)}
-
-/* THE RASTER IS NOW OVER THE WHOLE WINDOW, so the arena's own copy of it would
-   be a second set of lines at a different curvature crossing the first. The
-   stage keeps its scanlines only when the face is off. */
-.stage::after{display:none}
-
-/* a whisker of phosphor warmth over the app, so the palette reads as emitted
-   rather than printed. Kept small: the cast colours are chosen against measured
-   contrast ratios and a heavy tone here would quietly undo that work. */
-.app{filter:saturate(1.06) contrast(1.03) brightness(1.02)}
-
-@media (prefers-reduced-motion:reduce){
-  /* the curve is static, so it stays; only the weight comes down */
-  .crtface{opacity:.72}
-}
-
-/* ---- THE RASTER, CUT INTO THE TYPE -----------------------------------
-   The logo and the round counter are drawn by the same raster as everything
-   else, so the lines belong to the letterform rather than lying over it. This
-   is the treatment the 26% and the PAUSED card already use.
-   background-clip:text needs a painted background and a transparent fill, so
-   the colour moves out of `color` and into the gradient — which means the
-   hover colour has to move with it or the link stops responding. */
-/* .55 IS MEASURED, NOT CHOSEN. The scanline interleaves two brightnesses in the
-   letterform and BOTH have to clear, not their average: against the #1c0f2e bar
-   the lit rows read 16.3:1 and the cut rows 3.5:1, which clears the 3:1 needed
-   for display type at this size and weight with not much to spare. Taking the
-   alpha higher darkens the cut rows below the threshold and the wordmark starts
-   to disappear at a glance. Re-measure if the bar colour or the type size
-   moves. */
-.mark span, .st-round{
-  background-image:
-    repeating-linear-gradient(0deg,
-      rgba(0,0,0,.55) 0 1px, rgba(0,0,0,0) 1px 2px),
-    linear-gradient(var(--ink), var(--ink));
-  -webkit-background-clip:text;background-clip:text;
-  -webkit-text-fill-color:transparent;color:transparent}
-
-.mark:hover span{
-  background-image:
-    repeating-linear-gradient(0deg,
-      rgba(0,0,0,.55) 0 1px, rgba(0,0,0,0) 1px 2px),
-    linear-gradient(var(--hot), var(--hot))}
-
-/* the display face already carries a hard drop shadow; text-fill-color:
-   transparent would throw it away, so it is re-hung on the element itself */
-.mark span, .st-round{filter:drop-shadow(2px 2px 0 var(--shadow))}

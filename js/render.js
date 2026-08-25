@@ -128,6 +128,47 @@ export function project(x, y, z) {
    and the walls left the frame. A tube bulges; it does not swallow. At 0.014 the
    corner moves about eighteen pixels, which reads as curved glass and still lets
    the arena be a rectangle. */
+/* THE AIM POINTER.
+ *
+ * It was `cursor: crosshair` — the operating system's, not the game's, and the
+ * one thing on screen the player looks at most.
+ *
+ * WHERE IT IS DRAWN IS NOT WHERE THE MOUSE IS, and it has to be that way. The
+ * arena sits behind the barrel filter, so anything painted on this canvas is
+ * displaced before the player sees it. Painting at the raw mouse position would
+ * put the reticle visibly beside the cursor, worst at the edges. Painting at
+ * curvePointer(mouse) — the same flat position the shot is aimed at — is
+ * displaced BACK onto the cursor by the same curve. The mark and the mouse and
+ * the shot are then three readings of one number and cannot drift.
+ *
+ * THE GAP IS THE WHOLE IDEA: nothing is ever drawn over the thing being aimed
+ * at. Every arm is stroked twice, dark then bright, because a single-pass mark
+ * disappears the moment it crosses a lit prop and this floor is full of them.
+ * The arms are kept short for the same reason the shape was chosen — long
+ * straight limbs visibly disagree with the bowed raster near the edges.
+ *
+ * It carries the two things worth knowing at a glance and nothing else:
+ *   colour  cyan a line is open · grey none · magenta the magazine is empty
+ *   dim     the trigger is locked out mid-reload
+ */
+export function drawReticle(g, sx, sy, { line, dry, reloading }) {
+  const col = dry ? tok('hot') : line ? tok('cool') : tok('ink-3');
+  const R = 15, GAP = 4.5, LW = 2;
+  g.save();
+  if (reloading) g.globalAlpha = 0.42;
+  g.lineCap = 'butt';
+  const arms = () => {
+    g.beginPath();
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      g.moveTo(sx + dx * GAP, sy + dy * GAP);
+      g.lineTo(sx + dx * R, sy + dy * R);
+    }
+  };
+  g.strokeStyle = 'rgba(0,0,0,.72)'; g.lineWidth = LW + 2.5; arms(); g.stroke();
+  g.strokeStyle = col;               g.lineWidth = LW;       arms(); g.stroke();
+  g.restore();
+}
+
 export const CRT_K = 0.014;
 export function curvePointer(sx, sy, w, h) {
   if (!CRT_ON) return [sx, sy];

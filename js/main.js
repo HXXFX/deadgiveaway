@@ -10,7 +10,7 @@ import { rehearsalBusy, stepRehearsal } from './practice.js';
 import {
   cam, setCamera, project, screenToGround, drawFloor, pushWallsAndProps,
   pushFigure, pushCorpse, drawFlash, flushFaces, ring, mark, orbit, zoom, resetView,
-  curvePointer, CRT_K, stepMags, drawMags, stepShells, drawShells,
+  curvePointer, CRT_K, drawReticle, stepMags, drawMags, stepShells, drawShells,
   useVenue,
 } from './render.js';
 import * as hud from './hud.js';
@@ -46,6 +46,9 @@ if (_q.has('marker')) game.marker = _q.get('marker');
 if (_q.get('watch') === '1') { _unattended = true; setTimeout(() => setWatch(true), 60); }
 const input = { keys: new Set(), camera: 'top', aim: null, firing: false };
 const mouse = { x: 0, y: 0 };
+/* the reticle replaces the system cursor, so it must not be left painted on
+   the arena after the pointer has gone somewhere else */
+let mouseIn = false;
 /* `?warm=N` runs N ticks of the simulation before the first frame is drawn.
    A headless browser does not run requestAnimationFrame under a virtual clock,
    so every screenshot this project has ever taken has been frame ONE — the safe
@@ -138,6 +141,7 @@ function canvasXY(e) {
   const d = Math.min(2, window.devicePixelRatio || 1);
   return [(e.clientX - r.left) * d, (e.clientY - r.top) * d];
 }
+view.addEventListener('mouseleave', () => { mouseIn = false; });
 view.addEventListener('mousemove', (e) => {
   if (dragging) {
     const dx = e.clientX - dragging.x, dy = e.clientY - dragging.y;
@@ -146,7 +150,7 @@ view.addEventListener('mousemove', (e) => {
     game.camYaw = cam.yaw;
     return;
   }
-  const p = canvasXY(e); mouse.x = p[0]; mouse.y = p[1];
+  const p = canvasXY(e); mouse.x = p[0]; mouse.y = p[1]; mouseIn = true;
 });
 view.addEventListener('mousedown', (e) => {
   view.focus();
@@ -611,6 +615,19 @@ function draw(now) {
       g2d.fillRect(0, 0, w, h);
     }
   } else if (flashFor) flashFor = null;
+
+  /* THE AIM POINTER, LAST, so nothing in the arena is ever drawn over it.
+     Placed at curvePointer(mouse) rather than at the mouse: this canvas is
+     behind the barrel, so a mark painted where the cursor is would be displaced
+     away from it. See drawReticle in render.js. */
+  if (game.mode === 'play' && !game.paused && !game.you.dead && mouseIn) {
+    const cp = curvePointer(mouse.x, mouse.y, w, h);
+    drawReticle(g2d, cp[0], cp[1], {
+      line: !!(game.self && game.self.losOpen > 0),
+      dry: (game.you.ammo || 0) <= 0,
+      reloading: game.you.reloadUntil > game.now
+    });
+  }
 }
 
 /* THE DISPLACEMENT MAP, BUILT FROM THE SAME CONSTANT THE POINTER USES.
@@ -671,57 +688,7 @@ function buildCrtMap() {
      displacement of `value * side` pixels needs scale = side * peak * 255/127. */
   disp.setAttribute('scale', String(side * peak * (255 / 127)));
 }
-
-/* THE FACE OF THE TUBE, built from the WINDOW rather than the arena and bent
-   about twice as hard.
-   It can afford that because it is glass: the layer is pointer-events:none, so
-   nothing in it has a hit target to come apart from. Bending the app itself
-   would put every control somewhere other than where it is pressed, because a
-   filter is not part of layout -- measured, a box offset 60,40 by a filter
-   keeps its old rect while a transform moves it. The eye reads a tube from the
-   bowed raster more than from bent text, so this is the stronger effect as
-   well as the free one. */
-const FACE_K = 0.030;
-function buildFaceMap() {
-  const N = 128;
-  const W = window.innerWidth || 1200, H = window.innerHeight || 800;
-  const side = Math.max(W, H);
-  const c = document.createElement('canvas');
-  c.width = c.height = N;
-  const x = c.getContext('2d');
-  const img = x.createImageData(N, N);
-  const dxs = new Float32Array(N * N), dys = new Float32Array(N * N);
-  let peak = 0;
-  for (let j = 0; j < N; j++) {
-    for (let i = 0; i < N; i++) {
-      const u = (i + 0.5) / N * 2 - 1, v = (j + 0.5) / N * 2 - 1;
-      const f = 1 - FACE_K * (u * u + v * v);
-      const dx = (u * f - u) * (W / 2) / side;
-      const dy = (v * f - v) * (H / 2) / side;
-      dxs[j * N + i] = dx; dys[j * N + i] = dy;
-      peak = Math.max(peak, Math.abs(dx), Math.abs(dy));
-    }
-  }
-  for (let k = 0; k < N * N; k++) {
-    img.data[k * 4] = Math.round(128 + (peak ? dxs[k] / peak : 0) * 127);
-    img.data[k * 4 + 1] = Math.round(128 + (peak ? dys[k] / peak : 0) * 127);
-    img.data[k * 4 + 2] = 0;
-    img.data[k * 4 + 3] = 255;
-  }
-  x.putImageData(img, 0, 0);
-  const fe = document.getElementById('faceMap');
-  const disp = document.getElementById('faceDisp');
-  if (!fe || !disp) return;
-  const url = c.toDataURL();
-  fe.setAttributeNS('http://www.w3.org/1999/xlink', 'href', url);
-  fe.setAttribute('href', url);
-  fe.setAttribute('width', '100%'); fe.setAttribute('height', '100%');
-  disp.setAttribute('scale', String(side * peak * (255 / 127)));
-}
-
 buildCrtMap();
-buildFaceMap();
-addEventListener('resize', buildFaceMap);
 addEventListener('resize', buildCrtMap);
 
 /* ====================================================================== */
