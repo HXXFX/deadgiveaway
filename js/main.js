@@ -621,12 +621,12 @@ function draw(now) {
      behind the barrel, so a mark painted where the cursor is would be displaced
      away from it. See drawReticle in render.js. */
   if (game.mode === 'play' && !game.paused && !game.you.dead && mouseIn) {
+    /* NO STATE IS PASSED, deliberately. The reticle used to colour itself from
+       line of sight and the magazine, which handed the player as a glance what
+       the Mirror has to learn to read out of thirty-six raw numbers. See
+       drawReticle in render.js. */
     const cp = curvePointer(mouse.x, mouse.y, w, h);
-    drawReticle(g2d, cp[0], cp[1], {
-      line: !!(game.self && game.self.losOpen > 0),
-      dry: (game.you.ammo || 0) <= 0,
-      reloading: game.you.reloadUntil > game.now
-    });
+    drawReticle(g2d, cp[0], cp[1]);
   }
 }
 

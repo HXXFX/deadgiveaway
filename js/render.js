@@ -147,15 +147,23 @@ export function project(x, y, z) {
  * The arms are kept short for the same reason the shape was chosen — long
  * straight limbs visibly disagree with the bowed raster near the edges.
  *
- * It carries the two things worth knowing at a glance and nothing else:
- *   colour  cyan a line is open · grey none · magenta the magazine is empty
- *   dim     the trigger is locked out mid-reload
+ * IT IS WHITE, ALWAYS, AND THAT IS A FAIRNESS RULE RATHER THAN A STYLE.
+ *
+ * It used to go cyan when a line was open, grey when it was not, and magenta
+ * on an empty magazine. Those are all things the Mirror has in its own
+ * observation -- line of sight at x[21], the magazine at x[34], reloading at
+ * x[35] -- so the numbers are not the asymmetry. The asymmetry is that the
+ * player was handed them DIGESTED, as a colour, while the Mirror gets three
+ * raw values among thirty-six and has to learn on its own that they mean
+ * anything. A cue nobody had to learn is not the same game as a number
+ * somebody did.
+ *
+ * So the mark says where the shot goes and nothing more. Both sides read the
+ * room the same way: by looking at it.
  */
-export function drawReticle(g, sx, sy, { line, dry, reloading }) {
-  const col = dry ? tok('hot') : line ? tok('cool') : tok('ink-3');
+export function drawReticle(g, sx, sy) {
   const R = 15, GAP = 4.5, LW = 2;
   g.save();
-  if (reloading) g.globalAlpha = 0.42;
   g.lineCap = 'butt';
   const arms = () => {
     g.beginPath();
@@ -164,8 +172,10 @@ export function drawReticle(g, sx, sy, { line, dry, reloading }) {
       g.lineTo(sx + dx * R, sy + dy * R);
     }
   };
+  /* the dark pass is not decoration: a single-pass mark disappears the moment
+     it crosses a lit prop, and this floor is full of them */
   g.strokeStyle = 'rgba(0,0,0,.72)'; g.lineWidth = LW + 2.5; arms(); g.stroke();
-  g.strokeStyle = col;               g.lineWidth = LW;       arms(); g.stroke();
+  g.strokeStyle = '#ffffff';         g.lineWidth = LW;       arms(); g.stroke();
   g.restore();
 }
 
