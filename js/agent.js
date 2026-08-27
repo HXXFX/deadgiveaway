@@ -414,6 +414,10 @@ export function makeAgent(seed) {
            97%. What matters is whether the trigger reads HIGHER on the frames
            you fired than on the frames you did not. */
     agree: 0, agreeN: 0, keyBase: 0, keyVel: 0, keyRate: new Float32Array(4),
+    /* the hands at their DECISION FRAMES — the frames where the key set
+       changes. Everywhere else a held key predicts itself and every answer
+       ties; see the grading in learn() for the whole argument. */
+    decAgree: 0, decBase: 0, decVel: 0, decN: 0, lastKeys: null,
     lineN: 0, blindN: 0,
     aimHit: 0, aimBase: 0, binRate: new Float32Array(NAIM),
     pOn: 0, pOff: 0, fireN: 0, noFireN: 0,
@@ -666,6 +670,44 @@ export function learn(p, x, y) {
   p.agree = ema(p.agree, hit / 4, E, first);
   p.keyBase = ema(p.keyBase, base / 4, E, first);
   p.agreeN++;
+  /* THE HANDS' DECISION FRAMES. On ~19 frames in 20 the key set is whatever it
+     just was, a held key predicts itself, and policy and controls tie — so a
+     grade over all frames measures the holding, not the choosing. The frames
+     that CAN measure are the ones where the key set CHANGES, and they are
+     graded on the WHOLE new set, because the decision is the set, not one key
+     of it. Controls, same discipline as everywhere: the per-key majority set,
+     and the set read off the body's velocity — which lags behind the hands at
+     exactly these moments, which is the point of grading here. This is the
+     owner's ruling of 2026-08-27 as arithmetic: a key press has meaning taken
+     WITH the situation, so the hands are scored at the moments a situation
+     produced a new answer. */
+  {
+    const changed = p.lastKeys !== null &&
+      (y[0] !== p.lastKeys[0] || y[1] !== p.lastKeys[1] ||
+       y[2] !== p.lastKeys[2] || y[3] !== p.lastKeys[3]);
+    if (changed) {
+      const vx = x[23], vz = x[24];
+      const vG = [(vz < -0.3) ? 1 : 0, (vx < -0.3) ? 1 : 0,
+                  (vz > 0.3) ? 1 : 0, (vx > 0.3) ? 1 : 0];
+      let mAll = 1, bAll = 1, vAll = 1;
+      for (let k = 0; k < 4; k++) {
+        if ((sig(o[k]) > 0.5 ? 1 : 0) !== y[k]) mAll = 0;
+        if ((p.keyRate[k] > 0.5 ? 1 : 0) !== y[k]) bAll = 0;
+        if (vG[k] !== y[k]) vAll = 0;
+      }
+      /* decisions arrive at one or two a second, not sixty — the gain is
+         raised so this average settles over about a minute of play rather
+         than ten. Seeded on its own first sample, per the rule above; its own
+         count, per the same rule. */
+      const firstD = seed(p.decN);
+      p.decAgree = ema(p.decAgree, mAll, 0.01, firstD);
+      p.decBase  = ema(p.decBase,  bAll, 0.01, firstD);
+      p.decVel   = ema(p.decVel,   vAll, 0.01, firstD);
+      p.decN++;
+    }
+    if (p.lastKeys === null) p.lastKeys = [0, 0, 0, 0];
+    for (let k = 0; k < 4; k++) p.lastKeys[k] = y[k];
+  }
   /* WHICH DIRECTION, against the laziest possible answer: always pick whichever
      direction the player picks most often. Scored on the bin, because the aim is
      now a choice among directions rather than a number. */
@@ -1358,9 +1400,21 @@ export function agentScore(p) {
      "took everything that was left to take" */
   const over = (v, b, top) => (top - b < 1e-3 ? 0 : clamp((v - b) / (top - b), -1, 1));
   return {
-    keys: warm ? over(p.agree, Math.max(p.keyBase, p.keyVel), 1) : 0,
-    keysRaw: p.agree, keysBase: Math.max(p.keyBase, p.keyVel),
-    keysMajority: p.keyBase, keysFromMotion: p.keyVel,
+    /* THE HANDS ARE GRADED WHERE THE HANDS DECIDE. The frame-for-frame figure
+       is kept below as keysAll*, and it is the number that fooled everyone: a
+       held key predicts itself, ~92-97% of frames are holds, so the control
+       ties the policy and the edge reads zero whatever was learned. The score
+       is the edge at the CHANGE moments — did it call your new key set —
+       which is the only place movement style is visible at all. Same shape as
+       the aim fix directly below: grade the channel on the frames where the
+       channel acts. Gated on decisions SEEN, not frames watched — a player
+       who never changes keys gives it no decisions to be graded on, and that
+       reads 0 honestly ("nothing demonstrated"), not as a failure. */
+    keys: (p.decN > 100) ? over(p.decAgree, Math.max(p.decBase, p.decVel), 1) : 0,
+    keysRaw: p.decAgree, keysBase: Math.max(p.decBase, p.decVel),
+    keysMajority: p.decBase, keysFromMotion: p.decVel, keysDecN: p.decN,
+    keysAll: warm ? over(p.agree, Math.max(p.keyBase, p.keyVel), 1) : 0,
+    keysAllRaw: p.agree, keysAllBase: Math.max(p.keyBase, p.keyVel),
     /* THE AIM SCORE IS TAKEN ON THE FRAMES WHERE AIMING HAPPENS. A mouse is
        still on about ninety-seven per cent of frames and flicks on the rest, so
        a mean over all of them is a mean over "did not move" — and it read 0%
