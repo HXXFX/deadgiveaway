@@ -333,11 +333,11 @@ export function drawLoop(game) {
  * movement style at all because the number underneath was paying out for the
  * fact that a moving body keeps moving.
  */
-const TOOK = [
-  ['hands', 'which keys you hold', 'guessing the key you hold most'],
-  ['aim', 'how you swing the mouse', 'never turning at all'],
-  ['trigger', 'when you shoot', 'firing at your average rate'],
-];
+/* names only — what each channel measures and its control are prose now, and
+   prose lives in the panel's "?" help (index.html #helpMiss), where it was
+   updated when the hands moved to decision-frame grading. Data kept here goes
+   stale the moment a measurement changes; it did. */
+const TOOK = ['hands', 'aim', 'trigger'];
 export function drawMiss(game) {
   const c = $('cMiss'); if (!c) return;
   const { w, h, d } = fitCanvas(c);
@@ -382,7 +382,7 @@ export function drawMiss(game) {
     text(g, d, (v * 100).toFixed(0) + '%', t[0], t[1] - px(d, 5),
          v > 0.02 ? cols[i] : P.ink3, VAL, 900, 'center');
     const b2 = obl(ox, oy, s, i * PITCH + CW / 2, 0, 0);
-    label(g, d, TOOK[i][0], b2[0], b2[1] + px(d, 12), P.ink3, 9, 'center');
+    label(g, d, TOOK[i], b2[0], b2[1] + px(d, 12), P.ink3, 9, 'center');
   }
   label(g, d, A.graded.toLocaleString() + ' frames graded first',
         px(d, 11), px(d, 11), P.ink3, 9);
@@ -697,9 +697,9 @@ export function updateRail(game) {
   }
   const cn = $('copyN');
   if (cn) cn.textContent = A.lessons.toLocaleString() + ' lessons';
-  const cap = $('cmpCap');
-  if (cap) cap.textContent = 'It has the same keyboard, the same mouse and the same '
-    + 'view of the map as you. It started with nothing in it.';
+  /* #cmpCap used to be rewritten here every tick with one static sentence —
+     the fairness line, which lives in the panel's "?" help now. The caption in
+     the markup is the caption. */
 }
 
 /* ---- THE VITALS ----------------------------------------------------------

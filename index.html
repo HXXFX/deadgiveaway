@@ -161,8 +161,38 @@
 
   <!-- RIGHT RAIL: the three panels about YOU. Sized to fit, never scrolls. -->
   <aside class="rail">
+    <!-- EVERY PANEL: the picture carries the live INFO text, one short line of
+         description sits at the bottom, and the EXPLANATION lives behind the
+         "?" — the player asked for exactly this split. The help pop covers the
+         card's own body (see .pop-card): .card{overflow:hidden} clips anything
+         that tries to float outside, and every card sits at a screen edge, so
+         "the back of the card" is the one placement that never needs measuring. -->
     <section class="card knows">
-      <h2>How much it has become you</h2>
+      <h2>How much it has become you
+        <button class="qm" id="qmKnow" aria-expanded="false" aria-controls="helpKnow"
+                aria-label="How to read this panel"><span>?</span></button></h2>
+      <div class="pop pop-card" id="helpKnow" hidden role="dialog"
+           aria-label="How to read: how much it has become you">
+        <h4>How to read it</h4>
+        <p>The bench: your mask, the copy of it filling to the score, the dial
+           reading the same score, and the three gauges the score is made of —
+           hands, aim, trigger.</p>
+        <h4>The number is an edge, not a score</h4>
+        <p>Each gauge is how far past a <em>control</em> the policy got — the
+           best answer that needs no learning. Beat nothing, score nothing.</p>
+        <p><em>hands</em> (45%) is graded at the moments you change keys: a held
+           key predicts itself, so only your decisions can show a style. It
+           needs about a hundred key changes before it reads at all — and if you
+           never move, there is nothing to grade and it stays at zero honestly.</p>
+        <p><em>aim</em> (30%) is graded only on frames where you actually turn,
+           against always guessing your commonest direction.</p>
+        <p><em>trigger</em> (25%) is how many times more likely it is to call a
+           shot on a frame you shot than on one you did not.</p>
+        <h4>Why it can be trusted</h4>
+        <p>Every frame is graded before it is learned from, so the score is
+           never a memory of its own training set. &ldquo;Still watching&rdquo;
+           clears after 600 graded frames.</p>
+      </div>
       <!-- THE NUMBER IS AN EDGE, NOT A SCORE. Each of the three parts below is
            how far past a control the policy got - a control that needed no
            learning at all. A bar without its control is decoration, and an
@@ -191,15 +221,53 @@
     </section>
 
     <section class="card">
-      <h2>Its controls <span class="hint-i" id="copyN">no lessons yet</span></h2>
+      <h2>Its controls <span class="hint-i" id="copyN">no lessons yet</span>
+        <button class="qm" id="qmLoop" aria-expanded="false" aria-controls="helpLoop"
+                aria-label="How to read this panel"><span>?</span></button></h2>
+      <div class="pop pop-card" id="helpLoop" hidden role="dialog"
+           aria-label="How to read: its controls">
+        <h4>How to read it</h4>
+        <p>Your controls, in its hands: the keyboard at the back, the mouse
+           beside it, the trigger and the reload in front. A pressed key sinks,
+           and the fan on the desk is every direction it weighed for the turn it
+           is about to make.</p>
+        <h4>The lights are wants, not states</h4>
+        <p>Each figure is a live probability — how hard it wants that control
+           right now. It decides at a hand&rsquo;s tempo, about twelve decisions
+           a second, not sixty.</p>
+        <h4>The fair game</h4>
+        <p>It has exactly what you have: the same keys, the same mouse, the same
+           movement and shooting rules, and it reads your health and ammo the
+           same way you read its off the header. Nothing extra, nothing
+           missing.</p>
+      </div>
       <canvas id="cLoop" height="200"></canvas>
-      <p class="cap" id="cmpCap">It has the same keyboard, the same mouse and the
-        same view of the map as you.</p>
+      <p class="cap" id="cmpCap">Its live wants — each key, the turn, the
+        trigger, the reload.</p>
     </section>
 
     <section class="card grow">
-      <h2>What it sees <span class="hint-i" id="senseN">numbers, live</span></h2>
+      <h2>What it sees <span class="hint-i" id="senseN">numbers, live</span>
+        <button class="qm" id="qmSense" aria-expanded="false" aria-controls="helpSense"
+                aria-label="How to read this panel"><span>?</span></button></h2>
+      <div class="pop pop-card" id="helpSense" hidden role="dialog"
+           aria-label="How to read: what it sees">
+        <h4>How to read it</h4>
+        <p>The dome is its whole world. The sixteen fins are its distance
+           feelers, one every 22.5&deg; — tall and gold is open space, short and
+           red is a wall at its shoulder. The pale spoke is where it is facing;
+           the blue mark is you, with the range written on the line.</p>
+        <p>A solid line means it could shoot you right now; dashed means the
+           line is blocked. The base carries the two readings the dome cannot:
+           how long the line has been open, and a lamp for something in the air
+           at it.</p>
+        <h4>What it is given</h4>
+        <p>This picture is not drawn <em>from</em> the input — it <em>is</em>
+           the input: the 38 numbers the policy receives each frame, live.
+           Nothing here is something you cannot see on your own screen.</p>
+      </div>
       <canvas id="cSense"></canvas>
+      <p class="cap">Its whole world — the 38 numbers it is given, live.</p>
     </section>
   </aside>
 
@@ -209,19 +277,70 @@
        scrolled to. Real-time information cannot live below the fold. -->
   <div class="deck">
     <section class="card">
-      <h2>What it took off you <span class="hint-i">against a control</span></h2>
+      <h2>What it took off you <span class="hint-i">against a control</span>
+        <button class="qm" id="qmMiss" aria-expanded="false" aria-controls="helpMiss"
+                aria-label="How to read this panel"><span>?</span></button></h2>
+      <div class="pop pop-card" id="helpMiss" hidden role="dialog"
+           aria-label="How to read: what it took off you">
+        <h4>How to read it</h4>
+        <p>Three columns on one plate. The plate is the <em>control</em> — the
+           score a thing that learned nothing would get — and each column is
+           what the policy took past it. Zero means no better than the obvious
+           answer.</p>
+        <p><em>hands</em> — did it call your new key set at the moments you
+           change keys, against the best no-learning guess. <em>aim</em> — the
+           direction you turned, against your commonest direction.
+           <em>trigger</em> — whether its trigger reads higher on the frames you
+           fired, against firing at your average rate.</p>
+        <h4>&ldquo;Graded first&rdquo;</h4>
+        <p>Every frame is scored before it is trained on, so no column is a
+           memory of the training set.</p>
+      </div>
       <canvas id="cMiss"></canvas>
-      <p class="cap" id="missCap">Each bar is how far past something that learned
-        nothing it got. Zero means no better than the obvious answer.</p>
+      <p class="cap" id="missCap">Hands, aim and trigger, each as an edge past
+        its control.</p>
     </section>
     <section class="card">
-      <h2>The policy <span class="hint-i" id="brainN"></span></h2>
+      <h2>The policy <span class="hint-i" id="brainN"></span>
+        <button class="qm" id="qmBrain" aria-expanded="false" aria-controls="helpBrain"
+                aria-label="How to read this panel"><span>?</span></button></h2>
+      <div class="pop pop-card" id="helpBrain" hidden role="dialog"
+           aria-label="How to read: the policy">
+        <h4>How to read it</h4>
+        <p>The actual network, live: 38 numbers in, two hidden layers of 64, and
+           the decisions out — four keys, the choice of turn, the trigger, the
+           reload. The pulse is one decision crossing it, about twelve a second,
+           and its brightness is how much the layer it is passing is actually
+           doing. The marks on each slab are real activations, sampled across
+           the whole layer.</p>
+        <h4>What it does not show</h4>
+        <p>The weights — there are thousands, and any picture of them is a grey
+           rectangle. You are watching the thinking, not the wiring.</p>
+        <h4>All of it</h4>
+        <p>This one policy, plus a small dedicated reload net trained the same
+           way from the same frames, is everything. There is no scripted bot
+           behind it — no orbit, no peek timer, no routing, no cadence written
+           by hand.</p>
+      </div>
       <canvas id="cBrain"></canvas>
-      <p class="cap">What it is given, two hidden layers, and the six decisions it
-        makes. Live. There is no second model anywhere.</p>
+      <p class="cap">The one policy, thinking — a pulse per decision, live.</p>
     </section>
     <section class="card">
-      <h2>The ledger</h2>
+      <h2>The ledger
+        <button class="qm" id="qmSpark" aria-expanded="false" aria-controls="helpSpark"
+                aria-label="How to read this panel"><span>?</span></button></h2>
+      <div class="pop pop-card" id="helpSpark" hidden role="dialog"
+           aria-label="How to read: the ledger">
+        <h4>How to read it</h4>
+        <p>A staircase of the whole evening, one tread a round: the wide blue
+           treads are your kills, the narrow red steps behind them are its. It
+           is kept as it happens, never rebuilt from a summary afterwards.</p>
+        <h4>Why the kills matter</h4>
+        <p>It learns killing from exactly one source: watching you win. If you
+           have never killed it, it has never seen a kill. A round only ends
+           when somebody dies, and between rounds it takes one rehearsal step
+           against a frozen copy of itself and keeps what worked.</p>
+      </div>
       <canvas id="cSpark"></canvas>
       <p class="cap">Frames of you watched, and the kills the whole thing turns on.</p>
     </section>

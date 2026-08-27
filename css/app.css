@@ -483,6 +483,42 @@ button.alt[aria-pressed="true"]:not(:disabled){background:var(--panel);color:var
   background:repeating-linear-gradient(0deg,rgba(0,0,0,.16) 0 1px,transparent 1px 3px)}
 .card canvas{display:block;width:100%;flex:1;min-height:0}
 .cap{margin:7px 0 0;font-size:var(--fs-small);line-height:1.5;color:var(--ink-2)}
+/* ---- per-panel help ------------------------------------------------------ */
+/* THE HELP IS THE BACK OF THE CARD. The explanations used to sit under each
+   viz as captions; the player asked for the picture to carry the live info
+   text, one short description line at the bottom, and the prose to live
+   behind a "?". The pop covers the card's own body rather than floating
+   beside it, because .card{overflow:hidden} clips anything that leaves and
+   every card sits at a screen edge — covering itself is the one placement
+   that never needs measuring. The "?" stays visible in the heading, so the
+   button that opened it can always close it. */
+/* IT TAKES THE HEADING'S OWN COLOUR, and that is the whole rule. Written as a
+   literal dark it was styled for the light `--ink-2` heading fill that `.card
+   h2` declares — but every rail and deck heading overrides that to acid on the
+   dark panel, so the button measured 1.2:1 against what was actually behind it
+   and the player could not see it. `inherit` + `currentColor` cannot drift from
+   the heading again; measured against the acid headings it is 13:1. */
+button.qm{margin-left:auto;flex:0 0 auto;align-self:center;
+  width:18px;height:18px;padding:0;
+  font-family:var(--mono);font-weight:700;font-size:12px;line-height:16px;
+  letter-spacing:0;text-transform:none;color:inherit;background:transparent;
+  border:1px solid currentColor;transform:none;box-shadow:none;opacity:1}
+/* the base rule counter-skews every button's label by 9deg, which is only
+   right for the skewed poster buttons; this one stands square */
+button.qm > span{transform:none;display:block;line-height:16px}
+button.qm:hover:not(:disabled),button.qm[aria-expanded="true"]{
+  background:currentColor;transform:none;box-shadow:none}
+/* the glyph has to invert when the box fills, and `color` is now the fill —
+   so the letter is punched out with the panel behind it instead */
+button.qm:hover:not(:disabled) > span,button.qm[aria-expanded="true"] > span{
+  color:var(--panel-2)}
+button.qm:active:not(:disabled){transform:none;box-shadow:none}
+button.qm:focus-visible{outline:2px solid var(--acid);outline-offset:1px}
+.pop.pop-card{left:0;right:0;top:26px;bottom:0;width:auto;margin:0;
+  max-height:none;border-top:0;box-shadow:none;z-index:30;
+  padding:8px 12px 10px;overflow-y:auto;overscroll-behavior:contain}
+.pop.pop-card h4:first-child{margin-top:0}
+.pop.pop-card p{margin:0 0 7px}
 /* line-height 1 clipped the ascenders of a condensed face, which have further
    to go than Arial Black's did */
 /* A CONDENSED POSTER FACE HAS TALLER ASCENDERS THAN THE BOX A BROWSER GIVES IT,

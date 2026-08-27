@@ -281,15 +281,60 @@ $('btnReset').addEventListener('click', () => {
   hud.hideSheet(); togglePause(false); view.focus();
 });
 
-/* ---- info popover -------------------------------------------------------- */
-const pop = $('infoPop'), bInfo = $('btnInfo');
-function setPop(open) {
-  pop.hidden = !open;
-  bInfo.setAttribute('aria-expanded', String(open));
+/* ---- popovers: the header Info and each panel's "?" ----------------------
+   HOVER SHOWS, LEAVING HIDES, CLICK PINS — the owner's spec. Focus behaves
+   as hover does, or the pops are unreachable by keyboard. Leaving hides on a
+   short grace timer rather than at once: the pointer crossing the few pixels
+   between the button and the pop fires mouseleave before mouseenter, and an
+   immediate hide closes the pop in front of the reader — this is the bridge
+   rule from the hover-panel pattern, done in time instead of geometry. A
+   pinned pop ignores the pointer and closes on a click anywhere else, on
+   Escape, on its own button, or when another pop opens. On touch there is no
+   hover, so the tap lands on the click path and pins — nothing is lost. */
+const POPS = [
+  { b: $('btnInfo'), p: $('infoPop') },
+  ...[...document.querySelectorAll('.qm')]
+    .map((b) => ({ b, p: $(b.getAttribute('aria-controls')) })),
+].filter((en) => en.b && en.p);
+const setPop = (en, open) => {
+  en.p.hidden = !open;
+  en.b.setAttribute('aria-expanded', String(open));
+  if (!open) en.pinned = false;
+};
+const closePops = (except) => { for (const o of POPS) if (o !== except) setPop(o, false); };
+for (const en of POPS) {
+  en.pinned = false;
+  let t = 0;
+  const show = () => {
+    clearTimeout(t);
+    if (en.p.hidden) { closePops(en); setPop(en, true); }
+  };
+  const shy = () => {
+    if (en.pinned) return;
+    clearTimeout(t);
+    t = setTimeout(() => { if (!en.pinned) setPop(en, false); }, 150);
+  };
+  en.b.addEventListener('mouseenter', show);
+  en.b.addEventListener('mouseleave', shy);
+  en.p.addEventListener('mouseenter', () => clearTimeout(t));
+  en.p.addEventListener('mouseleave', shy);
+  en.b.addEventListener('focus', show);
+  en.b.addEventListener('blur', (e) => {
+    if (!en.p.contains(e.relatedTarget)) shy();
+  });
+  en.b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (en.pinned) setPop(en, false);
+    else { closePops(en); setPop(en, true); en.pinned = true; }
+  });
 }
-bInfo.addEventListener('click', (e) => { e.stopPropagation(); setPop(pop.hidden); });
-addEventListener('click', (e) => { if (!pop.hidden && !pop.contains(e.target)) setPop(false); });
-addEventListener('keydown', (e) => { if (e.key === 'Escape' && !pop.hidden) setPop(false); });
+addEventListener('click', (e) => {
+  for (const en of POPS)
+    if (!en.p.hidden && !en.p.contains(e.target)) setPop(en, false);
+});
+addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closePops();
+});
 
 /* ---- view gizmo ---------------------------------------------------------- */
 const cube = $('cube');
