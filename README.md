@@ -23,9 +23,16 @@ So the way it fights is the way *you* fight, a few rounds behind. Change your
 habits and it follows you into the new ones. Keep them, and it gets very good at
 beating the person who has them.
 
-The panels around the arena are not decoration. They read the live model: which
-of your keys it has learned, what it can see from where it stands, how much of
-its behaviour is now yours, and where it is still guessing.
+The panels around the arena are not decoration. They read the live model: what
+it can see from where it stands, which controls it is reaching for right now,
+how much of its behaviour is now yours, and where it is still guessing. Each
+one has a **?** in its heading — hover it for how to read that panel, click to
+pin it open.
+
+Every number on them is an **edge over a control**: the score something that
+learned nothing would get, subtracted. Zero does not mean broken, it means no
+better than the obvious answer — and a habit you never demonstrate stays at
+zero honestly rather than being credited to the model.
 
 ## Controls
 
