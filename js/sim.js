@@ -619,7 +619,11 @@ export function step(g, input, dtMs) {
       if (!s.mine) g.A.lifeOut += dmg; else g.A.lifeIn += dmg;
       /* and against the decision that caused it, for the per-frame gate */
       g.A.pendRew += s.mine ? -dmg : dmg;
-      t.hp -= dmg;
+      /* FLOORED AT ZERO. A two-damage core hit on a one-health body left
+         hp = -1 -- caught by the stress fleet's INV-HEALTH on 11 of 36 games.
+         Death itself was unaffected (the check is <= 0), but every reader of
+         hp then clamps or branches around a value that should not exist. */
+      t.hp = Math.max(0, t.hp - dmg);
       splat(g.room, t.x, t.z, g.splatN++, false);
       if (g.mode === 'play' && t === g.you) g.stats.hitsTaken++;
       if (t.hp <= 0 && t !== g.you && t !== g.ghost) {
