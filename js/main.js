@@ -11,7 +11,7 @@ import {
   cam, setCamera, project, screenToGround, drawFloor, pushWallsAndProps,
   pushFigure, pushCorpse, drawFlash, flushFaces, ring, mark, orbit, zoom, resetView,
   curvePointer, CRT_K, drawReticle, stepMags, drawMags, stepShells, drawShells,
-  useVenue,
+  useVenue, setCrt,
 } from './render.js';
 import * as hud from './hud.js';
 import { agentScore } from './agent.js';
@@ -51,6 +51,23 @@ if (_q.get('watch') === '1') { _unattended = true; setTimeout(() => setWatch(tru
    It would sit at full health forever, and the frozen game looked like an AI
    that had stopped shooting. Dev-only, changes no rule of play. */
 if (_q.get('unattended') === '1') _unattended = true;
+/* ?nocrt=1 TAKES THE WHOLE TUBE OFF: the bend filter, the scanlines and the
+   glass. It exists to split a bug report in half. A band of shifted pixels at
+   the canvas edge can come from the game's drawing or from everything layered
+   on top of it -- and the second kind can be machine-specific (compositor,
+   driver, display scale), invisible on the machine doing the debugging. A
+   42-configuration harness sweep (dev_log/audit/probe-crt-view.html) found
+   the filter clean here; this flag lets the machine that CAN see the artifact
+   run the same A/B in one reload. setCrt(false) un-curves the pointer to
+   match the now-flat picture -- the two must always read the same formula. */
+if (_q.get('nocrt') === '1') {
+  setCrt(false);
+  $('view').style.filter = 'none';
+  for (const sel of ['.scan', '.glass']) {
+    const el = document.querySelector(sel);
+    if (el) el.style.display = 'none';
+  }
+}
 const input = { keys: new Set(), camera: 'top', aim: null, firing: false };
 const mouse = { x: 0, y: 0 };
 /* the reticle replaces the system cursor, so it must not be left painted on
