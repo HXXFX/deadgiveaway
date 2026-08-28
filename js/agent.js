@@ -393,6 +393,24 @@ export function makeAgent(seed) {
        after it — needed for the per-FRAME gate, which keeps the decisions that
        beat expectation rather than every decision in a lucky round */
     lrew: new Float32Array(LIFE_BUF), pendRew: 0, retMean: 0, retN: 0,
+    /* THE BEST VERSION OF YOU, NOT THE AVERAGE OF YOU.
+       Every frame you produce used to be drawn with equal probability, so the
+       policy converged on your CENTRAL TENDENCY -- your good reads and your
+       panics weighted the same, your bad habits copied at exactly the rate you
+       have them. `brew` is what damage followed each of your decisions and
+       `bq` is the discounted return once the round is over, so the draw can
+       prefer the moments that beat your own average.
+       This is NOT the self-imitation that was measured and shipped off (see
+       HANDOFF 30): that learned from the MIRROR's own rounds, which is a
+       feedback loop with no new information in it and over-sharpened. This
+       re-weights YOUR frames only. No new source, just a better question asked
+       of the same data. */
+    brew: new Float32Array(NET.BUF), bq: new Float32Array(NET.BUF),
+    youPend: 0, youLifeN: 0, qMean: 0, qN: 0, goodFrames: 0,
+    /* how many extra candidates each draw competes against. 0 reproduces the
+       old uniform behaviour exactly, which is the control this must be measured
+       against. */
+    bestW: 1,
     sbx: new Float32Array(NET.BUF * OBS), sby: new Float32Array(NET.BUF * ACT),
     sHead: 0, sN: 0,
     lifeOut: 0, lifeIn: 0, lives: 0, liveMean: 0, liveM2: 0, livesKept: 0,
@@ -417,7 +435,9 @@ export function makeAgent(seed) {
     /* the hands at their DECISION FRAMES — the frames where the key set
        changes. Everywhere else a held key predicts itself and every answer
        ties; see the grading in learn() for the whole argument. */
-    decAgree: 0, decBase: 0, decVel: 0, decN: 0, lastKeys: null,
+    decAgree: 0, decBase: 0, decVel: 0, decN: 0, lastKeys: null, pend: null,
+
+
     lineN: 0, blindN: 0,
     aimHit: 0, aimBase: 0, binRate: new Float32Array(NAIM),
     pOn: 0, pOff: 0, fireN: 0, noFireN: 0,
@@ -427,6 +447,42 @@ export function makeAgent(seed) {
        Not a bug in it — an arithmetic fact about it. See DRIVE above. Turn it on
        with agentOpts { drive: 1 } and watch it in tools/ablate.py. */
     drive: 0, el: null, rewardTotal: 0, rewardN: 0, noVel: 0, aimAbs: 0,
+    /* WHAT THE REHEARSAL PAYS FOR BESIDES DAMAGE.
+       'near' -- the near-miss term: how close each finished shot passed, minus
+                 a running mean of every shot. Dense, self-cancelling, and NOT
+                 potential-based, so it can in principle shift the optimum
+                 toward "almost hit" rather than "hit".
+       'none' -- damage only. Outcomes and nothing else.
+       'aim'  -- potential-based: W*(GAMMA*phi' - phi) where phi is how well the
+                 learner is lined up. Dense like 'near', but of the form Ng,
+                 Harada & Russell (1999) prove cannot change which policy is
+                 optimal -- it pays for IMPROVING the aim, never for holding it,
+                 and telescopes to almost nothing over an episode. */
+    /* MEASURED BEFORE IT WAS CHOSEN. Four seeds, thirty rehearsals each,
+       scored on DAMAGE rather than on total reward -- scoring a shaped run by
+       its own shaping only rewards whoever was paid most:
+
+         mode   damage/rehearsal        rollouts discarded of 30
+         none   -1.0 -2.33 -2.67  0     26, 21, 22, 30
+         near   +1.67 -0.33 -2.0  0      1,  0,  0, 30
+         aim    -1.0 -1.67 +0.33  0      0,  0,  0,  0
+
+       No variant produces damage: a health point is 10 units, so two thousand
+       steps of self-play move about a TENTH of one either way. The shaping was
+       never improving the practice fight, only keeping its rollouts out of the
+       zero-mass bin -- and the potential term kept ALL of them by defeating
+       that guard, which is worse than losing them. The guard reads the outcome
+       half now, so that cannot happen again.
+       Shipped 'none' on the owner's rule: reward outcomes and nothing else.
+       The other two are kept switchable because they were measured, not
+       guessed, and the measurement should be repeatable once the rehearsal is
+       a real fight rather than two bodies circling. */
+    shapeMode: 'none', shapePhi: 0,
+    /* WHAT BECAME OF EACH PRACTICE FIGHT, in order: 1 kept, 0 thrown away.
+       The panel draws this as the evening's mirror, one shard a fight -- and
+       the gaps are the discard rate, which no readout has ever shown. Counts
+       alone cannot draw it; the SEQUENCE is the picture. */
+    rehearsalLog: [],
     /* no aim exploration by default: it measured strongly negative, and the
        aim is the one channel imitation is already good at */
     sigma: 0, driveLR: DRIVE.LR, pendingR: 0, rBar: 0,
@@ -681,32 +737,97 @@ export function learn(p, x, y) {
      owner's ruling of 2026-08-27 as arithmetic: a key press has meaning taken
      WITH the situation, so the hands are scored at the moments a situation
      produced a new answer. */
+  /* AND IT IS GIVEN DECIDE_WIN FRAMES TO ANSWER, BECAUSE YOU ARE TOO.
+   *
+   * Graded on the exact frame of the change, this asked the Mirror to
+   * ANTICIPATE a decision whose cause it may not be able to see — and nothing
+   * causal can. Measured: against a strictly periodic player it called the new
+   * key set on the frame 11% of the time and WITHIN THREE FRAMES 92%, missing
+   * entirely 4 times in 780. It really does move with you; it is a beat behind,
+   * which is what following looks like.
+   *
+   * The fairness rule decides it. You cannot anticipate the Mirror's key
+   * changes either — you react to them — so grading it on anticipation holds
+   * it to a standard you are not held to, and this is a fair game. It gets the
+   * same grace a hand gets.
+   *
+   * THE CONTROLS GET THE SAME WINDOW, or the comparison is rigged. That is not
+   * a formality: after a change the body's velocity swings to reveal the new
+   * keys, so a window could have handed the velocity control the answer and
+   * collapsed the edge to nothing again. Measured with the window on all three
+   * (probe-hands.html, WIN=3):
+   *
+   *     teacher      model   majority   velocity   edge
+   *     duelist       72.8      49.1       26.5    +46.6%
+   *     metronome     91.7      50.0        0.0    +83.4%
+   *     coinflip       0.1       0.0       30.0    negative -> 0
+   *
+   * The random player scores BELOW its own control and floors at zero, which
+   * is the only reason the other two numbers are worth anything. */
   {
-    const changed = p.lastKeys !== null &&
+    /* NO ALLOCATION IN HERE. This block runs on EVERY frame, and the first
+       version built three 4-element arrays and a closure each time -- measured
+       at 938 us per sim tick before and 1642 us after, a 75% regression for a
+       measurement that changes no behaviour at all. The guesses are written
+       into scratch that lives on the policy and the comparison is spelled out
+       rather than closed over. In a hot loop, look at allocation first. */
+    /* ONLY ON THE FRAMES THAT CAN MATTER. A decision is open for at most
+       DECIDE_WIN frames after a key change, so this has work to do on roughly
+       a third of frames -- and the four sig() calls below are the expensive
+       part. Run unconditionally it charged the whole session for a measurement
+       that is idle most of the time. */
+    /* SEEDED BEFORE THE GATE IS TESTED. Left inside it, this deadlocked: the
+       gate opens only on a change or an open decision, `changedNow` is false
+       while lastKeys is null, and lastKeys was only ever assigned inside the
+       gate -- so it stayed null, the gate never opened, and the whole hands
+       grade silently measured nothing (the metronome read 0%). An
+       initialisation that the guard depends on cannot live behind the guard. */
+    if (p.lastKeys === null) p.lastKeys = [y[0], y[1], y[2], y[3]];
+    const changedNow =
       (y[0] !== p.lastKeys[0] || y[1] !== p.lastKeys[1] ||
        y[2] !== p.lastKeys[2] || y[3] !== p.lastKeys[3]);
-    if (changed) {
-      const vx = x[23], vz = x[24];
-      const vG = [(vz < -0.3) ? 1 : 0, (vx < -0.3) ? 1 : 0,
-                  (vz > 0.3) ? 1 : 0, (vx > 0.3) ? 1 : 0];
-      let mAll = 1, bAll = 1, vAll = 1;
-      for (let k = 0; k < 4; k++) {
-        if ((sig(o[k]) > 0.5 ? 1 : 0) !== y[k]) mAll = 0;
-        if ((p.keyRate[k] > 0.5 ? 1 : 0) !== y[k]) bAll = 0;
-        if (vG[k] !== y[k]) vAll = 0;
+    if (p.pend || changedNow) {
+    const vx = x[23], vz = x[24];
+    const G = DEC_G;                     /* [m0..m3, b0..b3, v0..v3] scratch */
+    G[0] = sig(o[0]) > 0.5 ? 1 : 0; G[1] = sig(o[1]) > 0.5 ? 1 : 0;
+    G[2] = sig(o[2]) > 0.5 ? 1 : 0; G[3] = sig(o[3]) > 0.5 ? 1 : 0;
+    G[4] = p.keyRate[0] > 0.5 ? 1 : 0; G[5] = p.keyRate[1] > 0.5 ? 1 : 0;
+    G[6] = p.keyRate[2] > 0.5 ? 1 : 0; G[7] = p.keyRate[3] > 0.5 ? 1 : 0;
+    G[8] = (vz < -0.3) ? 1 : 0; G[9] = (vx < -0.3) ? 1 : 0;
+    G[10] = (vz > 0.3) ? 1 : 0; G[11] = (vx > 0.3) ? 1 : 0;
+    const q = p.pend;
+    if (q) {
+      const w = q.want;
+      if (!q.hitM) q.hitM = G[0] === w[0] && G[1] === w[1] && G[2] === w[2] && G[3] === w[3];
+      if (!q.hitB) q.hitB = G[4] === w[0] && G[5] === w[1] && G[6] === w[2] && G[7] === w[3];
+      if (!q.hitV) q.hitV = G[8] === w[0] && G[9] === w[1] && G[10] === w[2] && G[11] === w[3];
+      /* a pending is abandoned the moment the hand moves on: judging it
+         against a target the player has already left is not a fair question */
+      const moved = !(y[0] === q.want[0] && y[1] === q.want[1] &&
+                      y[2] === q.want[2] && y[3] === q.want[3]);
+      if (moved || ++q.age > DECIDE_WIN) {
+        /* decisions arrive at one or two a second, not sixty, so the gain is
+           raised to settle over about a minute of play. Seeded on its own
+           first sample with its own count, per the rule above. */
+        const firstD = seed(p.decN);
+        p.decAgree = ema(p.decAgree, q.hitM ? 1 : 0, 0.01, firstD);
+        p.decBase  = ema(p.decBase,  q.hitB ? 1 : 0, 0.01, firstD);
+        p.decVel   = ema(p.decVel,   q.hitV ? 1 : 0, 0.01, firstD);
+        p.decN++;
+        p.pend = null;
       }
-      /* decisions arrive at one or two a second, not sixty — the gain is
-         raised so this average settles over about a minute of play rather
-         than ten. Seeded on its own first sample, per the rule above; its own
-         count, per the same rule. */
-      const firstD = seed(p.decN);
-      p.decAgree = ema(p.decAgree, mAll, 0.01, firstD);
-      p.decBase  = ema(p.decBase,  bAll, 0.01, firstD);
-      p.decVel   = ema(p.decVel,   vAll, 0.01, firstD);
-      p.decN++;
     }
-    if (p.lastKeys === null) p.lastKeys = [0, 0, 0, 0];
+    if (changedNow && !p.pend) {
+      /* the one allocation, and it happens once per DECISION (a few a second),
+         not once per frame */
+      const want = [y[0], y[1], y[2], y[3]];
+      p.pend = { want, age: 0,
+                 hitM: G[0] === want[0] && G[1] === want[1] && G[2] === want[2] && G[3] === want[3],
+                 hitB: G[4] === want[0] && G[5] === want[1] && G[6] === want[2] && G[7] === want[3],
+                 hitV: G[8] === want[0] && G[9] === want[1] && G[10] === want[2] && G[11] === want[3] };
+    }
     for (let k = 0; k < 4; k++) p.lastKeys[k] = y[k];
+    }
   }
   /* WHICH DIRECTION, against the laziest possible answer: always pick whichever
      direction the player picks most often. Scored on the bin, because the aim is
@@ -745,6 +866,14 @@ export function learn(p, x, y) {
      tenth of frames, so these two fill at very different speeds; starting both
      at zero handed the controller a false error for its first minute, on the
      one channel that then walks to a clamp it takes half a minute to leave. */
+  /* THE TWO SIDES DO NOT SHARE A DENOMINATOR, AND TRYING TO MAKE THEM MADE IT
+     WORSE. sim.js counts the Mirror only on frames where a shot was available;
+     this counts the player on every frame. That asymmetry is real and it is
+     written up in HANDOFF section 66 -- but gating this side by the same rule,
+     derived from x[26]/x[34]/x[35], drove rateYouLine to exactly 0.000% and the
+     trigger bias to -4.5, and the Mirror fired LESS (duellist 38 shots -> 29,
+     gap 506 ms -> 698 ms). Measured, reverted, left alone. Do not re-apply this
+     without measuring rateYouLine directly: it is the number that collapses. */
   if (x[21] > 0.5) {
     p.rateYouLine = ema(p.rateYouLine, y[4] > 0.5 ? 1 : 0, E, seed(p.lineN));
     p.lineN = (p.lineN || 0) + 1;
@@ -805,15 +934,32 @@ export function learn(p, x, y) {
       p.by[i * ACT + RELOAD] = 1;
     }
   }
+  /* DAMAGE ARRIVES AFTER THE DECISION THAT CAUSED IT -- rounds are in flight
+     for about half a second -- so whatever landed since the last frame belongs
+     to the last frame. Same reasoning as noteSelf() uses for the Mirror. */
+  if (p.youLifeN > 0) p.brew[(p.head - 1 + NET.BUF) % NET.BUF] = p.youPend;
+  p.youPend = 0;
+  p.brew[p.head] = 0;
+  p.bq[p.head] = 0;              /* unscored until the round it belongs to ends */
+  p.youLifeN++;
   p.head = (p.head + 1) % NET.BUF;
   p.n = Math.min(p.n + 1, NET.BUF);
   if (p.n < 60) return;
   for (let s = 0; s < NET.STEPS; s++) {
     /* half the draws from the newest eighth, so a change of style lands */
     const recent = Math.min(512, p.n);
-    const r = p.rnd() < 0.5
+    let r = p.rnd() < 0.5
       ? Math.floor(p.rnd() * p.n)
       : (p.head - 1 - Math.floor(p.rnd() * recent) + NET.BUF * 2) % NET.BUF % Math.max(1, p.n);
+    /* and the moments that worked get drawn more often. A tournament rather
+       than a weighted table: no allocation, no cumulative sums to maintain,
+       and the strength is one integer. */
+    for (let k = 0; k < p.bestW; k++) {
+      const c = p.rnd() < 0.5
+        ? Math.floor(p.rnd() * p.n)
+        : (p.head - 1 - Math.floor(p.rnd() * recent) + NET.BUF * 2) % NET.BUF % Math.max(1, p.n);
+      if (p.bq[c] > p.bq[r]) r = c;
+    }
     const ref = REFL[Math.floor(p.rnd() * 4)];
     reflect(ref, p.bx.subarray(r * OBS, r * OBS + OBS),
                  p.by.subarray(r * ACT, r * ACT + ACT));
@@ -888,6 +1034,68 @@ export function learn(p, x, y) {
    whole session and never arrived. A bias clamped at -8 also cannot express
    "never": sig(-8) still fires on one frame in three thousand, which over 97% of
    frames is a quarter of its shots. */
+/* HOISTED OUT OF noteFired(). It was rebuilt on every call, and fixing the
+   cadence gate in sim.js tripled how often that call happens. A closure in a
+   per-frame path is an allocation in a per-frame path. */
+/* HOW FAST IT LEARNS YOUR RATE OF FIRE.
+ *
+ * These were a per-FRAME time constant, and this loop does not get a frame's
+ * worth of evidence per frame. `biasLine` only updates when the Mirror could
+ * fire AND had a line -- measured, 467 updates in a 120 s session against 7200
+ * frames -- while the EMA it steers on has a time constant of 1/A = 667
+ * updates. Both the measurement and the controller were therefore slower than
+ * a whole session:
+ *
+ *     player fires on 15-20% of its line frames, Mirror on 4.4%
+ *     biasLine needs about +3.0 to close that, gains ~1.5 a session
+ *
+ * So it took roughly two sessions to match a rate the player set in one round,
+ * and in the meantime the Mirror fires every 889 ms against a player firing
+ * every 338 ms -- which reads, correctly, as "it had the angle and did not
+ * shoot". Scaled by TRIG_K together, so the ratio between how fast the
+ * controller moves and how fast its own measurement updates is unchanged: that
+ * ratio is what the original note was protecting against oscillation, and it is
+ * preserved exactly. */
+const TRIG_K = 1;   /* 4 was tried, both ways; see the measurements below */
+/* TWO SPEED-UPS TRIED, BOTH MEASURED, NEITHER KEPT. The loop is genuinely too
+   slow -- it needs about two sessions to match a rate the player sets in one
+   round -- but it is UNDER-DAMPED rather than merely slow, and speeding it up
+   makes it miss in both directions instead of one:
+
+     TRIG_K=4 on A and GAIN   tapper's Mirror 26.5% of line frames vs its
+                              player's 7.1%, and copies-tempo INVERTED
+                              (24/min at a sprayer, 40/min at a tapper)
+     TRIG_K=4 on A only       both Mirrors converge to ~12% regardless of
+                              whether their player fires at 20% or 5%
+
+   The second is the more informative failure. The NET does learn the
+   difference -- backing the bias out leaves it at 7.4% for the sprayer's
+   Mirror and 0.8% for the tapper's -- and then the controller drags both to a
+   common value, overshooting the slow shooter and undershooting the fast one.
+   So the trigger RATE is not unlearned; it is learned and then flattened by
+   the loop that exists to fix a different problem (blind versus line).
+   Whatever fixes this is a control-design change, not a constant. */
+const NF = { A: 0.0015 * TRIG_K, GAIN: 0.004, LIM: 8 };
+function nfStep(got, want, bias) {
+    /* NO EVIDENCE MEANS RELAX, NOT HOLD.
+     *
+     * This is an integrator, and an integrator with nothing to integrate keeps
+     * whatever extreme it last reached. Measured: biasBlind sat at exactly -8.00
+     * — the clamp — for two hundred seconds, with BOTH rates at 0.00000, so the
+     * error was zero and nothing moved it. The Mirror had stopped firing blind,
+     * which is what made both rates zero, which is what kept it from ever firing
+     * blind again. The player felt it as the AI going quiet and never coming
+     * back.
+     *
+     * Below one event per averaging window neither rate carries information, so
+     * the bias leaks toward neutral at a quarter of the gain. It is not a nudge
+     * toward firing — neutral is whatever the policy itself would do. */
+    if (Math.max(want, got) < NF.A * 0.5)
+      return bias - Math.sign(bias) * Math.min(Math.abs(bias), NF.GAIN * 0.25);
+    const scale = Math.max(want, got, 1e-4);
+    return clamp(bias + clamp((want - got) / scale, -1, 1) * NF.GAIN, -NF.LIM, NF.LIM);
+  }
+
 export function noteFired(p, didFire, hadLine) {
   /* LIM USED TO BE 15, AND THAT IS WHY IT COULD NOT COME BACK.
    *
@@ -906,32 +1114,13 @@ export function noteFired(p, didFire, hadLine) {
    * GAIN stays where it is: the rates it steers are EMAs with a time constant
    * of 1/A, about eleven seconds, and a controller that moved much faster than
    * its own measurement updates would oscillate rather than settle. */
-  const A = 0.0015, GAIN = 0.004, LIM = 8;
-  const step = (got, want, bias) => {
-    /* NO EVIDENCE MEANS RELAX, NOT HOLD.
-     *
-     * This is an integrator, and an integrator with nothing to integrate keeps
-     * whatever extreme it last reached. Measured: biasBlind sat at exactly -8.00
-     * — the clamp — for two hundred seconds, with BOTH rates at 0.00000, so the
-     * error was zero and nothing moved it. The Mirror had stopped firing blind,
-     * which is what made both rates zero, which is what kept it from ever firing
-     * blind again. The player felt it as the AI going quiet and never coming
-     * back.
-     *
-     * Below one event per averaging window neither rate carries information, so
-     * the bias leaks toward neutral at a quarter of the gain. It is not a nudge
-     * toward firing — neutral is whatever the policy itself would do. */
-    if (Math.max(want, got) < A * 0.5)
-      return bias - Math.sign(bias) * Math.min(Math.abs(bias), GAIN * 0.25);
-    const scale = Math.max(want, got, 1e-4);
-    return clamp(bias + clamp((want - got) / scale, -1, 1) * GAIN, -LIM, LIM);
-  };
+  const A = NF.A;   /* see TRIG_K above: this loop is sample-starved, not slow */
   if (hadLine) {
     p.rateItLine = p.rateItLine * (1 - A) + (didFire ? A : 0);
-    p.biasLine = step(p.rateItLine, p.rateYouLine, p.biasLine);
+    p.biasLine = nfStep(p.rateItLine, p.rateYouLine, p.biasLine);
   } else {
     p.rateItBlind = p.rateItBlind * (1 - A) + (didFire ? A : 0);
-    p.biasBlind = step(p.rateItBlind, p.rateYouBlind, p.biasBlind);
+    p.biasBlind = nfStep(p.rateItBlind, p.rateYouBlind, p.biasBlind);
   }
   p.rateIt = p.rateIt * (1 - A) + (didFire ? A : 0);
 }
@@ -1150,12 +1339,46 @@ export function ppoBatch(p, b, idx, from, to) {
 
     /* the same backward pass everything else here uses */
     pdH2.fill(0);
+    /* THE CRITIC GETS ITS OWN HEAD AND NOTHING ELSE.
+     *
+     * The value output shares this trunk with every policy head, so an
+     * `err[VAL]` allowed into `pdH2` rewrites w1 and w2 -- and the policy is
+     * a function of w1 and w2. Training the critic therefore moved the
+     * trigger, which is not a subtle second-order effect: MEASURED, with the
+     * advantage forced to exactly zero so the policy gradient was provably
+     * off, ONE 256-sample critic pass cut the Mirror's mean fire probability
+     * by 35.7%. The entropy term over the same batch moved it 0.0%.
+     *
+     * That is what made the Mirror go quiet after a few rounds. `ppoWarm > 8`
+     * gates the policy GRADIENT, and the comment there promised the policy was
+     * "left exactly as imitation built it" for the first rollouts. It was not.
+     * The gate held; the trunk underneath it was being retrained anyway, and
+     * since a trigger that fires on ~0.1% of frames has almost no margin, a
+     * uniform downward drift reads to the player as an enemy that has stopped
+     * shooting. It also leaves the READOUT intact, which is why the report can
+     * show trigger 4x while nothing comes out of the gun -- the ranking of
+     * frames survives a shift that the absolute rate does not.
+     *
+     * So the critic updates w3[VAL] and b3[VAL] and stops there. It becomes a
+     * linear readout on the features imitation built, which is weaker as a
+     * critic and is the point: in this project the policy is what watching the
+     * player produced, and the practice fight is only allowed to nudge it.
+     * If the critic ever needs real capacity it must get its OWN hidden layers
+     * -- never a share of these. */
     for (let k = 0; k < NET.OUT; k++) {
       const g = err[k], off = k * NET.H2;
       if (!g) continue;
-      for (let j = 0; j < NET.H2; j++) {
-        pdH2[j] += p.w3[off + j] * g;
-        p.w3[off + j] -= lr * g * p.h2[j];
+      /* `p.criticTrunk` puts the old behaviour back, for the ablation only --
+         the same shape as noAnchor / noRehearse / noVel elsewhere. A fix to a
+         learning rule is worth nothing without a run of the harness on both
+         sides of it, and this is what lets probe-tempo.html measure the two. */
+      if (k === VAL && !p.criticTrunk) {
+        for (let j = 0; j < NET.H2; j++) p.w3[off + j] -= lr * g * p.h2[j];
+      } else {
+        for (let j = 0; j < NET.H2; j++) {
+          pdH2[j] += p.w3[off + j] * g;
+          p.w3[off + j] -= lr * g * p.h2[j];
+        }
       }
       p.b3[k] -= lr * g;
     }
@@ -1194,6 +1417,36 @@ export function noteSelf(p, x, y) {
   p.lby.set(y, p.lN * ACT);
   p.lrew[p.lN] = 0;
   p.lN++;
+}
+
+/* YOUR ROUND ENDED -- score the frames of it by what followed them.
+ *
+ * Walks back over the frames of the life just finished and gives each one the
+ * discounted return of the damage that came after it: landing hits scores
+ * positive, taking them scores negative, and a quiet stretch scores near zero.
+ * The running mean is kept so "better than usual" means better than YOUR usual
+ * rather than better than a number someone chose.
+ *
+ * Nothing is discarded. Every frame stays in the buffer and stays learnable --
+ * this only changes how OFTEN each is drawn. A habit you have in your worst
+ * moments is still copied, just less than the one you win with.
+ */
+export function endYouLife(p) {
+  const n = Math.min(p.youLifeN, p.n);
+  p.youLifeN = 0;
+  if (n < 30) { p.youPend = 0; return 0; }
+  p.brew[(p.head - 1 + NET.BUF) % NET.BUF] += p.youPend;
+  p.youPend = 0;
+  let acc = 0, kept = 0;
+  for (let k = 1; k <= n; k++) {
+    const i = (p.head - k + NET.BUF * 2) % NET.BUF;
+    acc = p.brew[i] + 0.99 * acc;
+    p.bq[i] = acc;
+    p.qN++; p.qMean += (acc - p.qMean) / p.qN;
+    if (acc > p.qMean) kept++;
+  }
+  p.goodFrames += kept;
+  return kept;
 }
 
 /* THE LIFE ENDED. Score it, and keep it only if it was better than its own
@@ -1307,7 +1560,11 @@ export function studyBeat(p, n) {
 
 export function studyOnce(p) {
   if (p.n < 60) return;
-  const r = Math.floor(p.rnd() * p.n);
+  let r = Math.floor(p.rnd() * p.n);
+  for (let k = 0; k < p.bestW; k++) {
+    const c = Math.floor(p.rnd() * p.n);
+    if (p.bq[c] > p.bq[r]) r = c;
+  }
   const ref = REFL[Math.floor(p.rnd() * 4)];
   reflect(ref, p.bx.subarray(r * OBS, r * OBS + OBS),
                p.by.subarray(r * ACT, r * ACT + ACT));
@@ -1321,6 +1578,15 @@ export function studyOnce(p) {
    the rate it learned rather than all-or-nothing. */
 export const NAMES = ['w', 'a', 's', 'd'];
 export const DECIDE_EVERY = 5;   /* frames — about twelve decisions a second */
+/* HOW LONG THE HANDS GRADE GIVES IT TO ANSWER A CHANGE. Three frames, ~50 ms:
+   a reaction, not a prediction. See the grading block in learn() for why a
+   window is the fair question and for the measured effect on the controls. */
+export const DECIDE_WIN = 3;
+/* MODULE SCOPE, NOT A FIELD ON THE POLICY. Only the player's policy ever calls
+   learn(), so one shared buffer is safe -- and keeping it off the policy object
+   leaves that object's shape exactly as every hot function already expects it.
+   See the perf note in learn(). */
+const DEC_G = new Float32Array(12);
 
 /* A POLICY IS SAMPLED, NOT ARGMAXED.
  *
