@@ -34,7 +34,7 @@
  */
 import { createGame, step, shoot, applyKeys } from './sim.js';
 import { WORLD, PLAYER, FOE, MAG } from './config.js';
-import { blocked } from './room.js';
+import { blocked, nearestProp } from './room.js';
 import { see, act, ppoBatch, studyBeat, PPO, OBS } from './agent.js';
 
 const TRAIL_EVERY = 6;          /* frames between trail samples for the card */
@@ -179,9 +179,55 @@ function gae(r, lastV) {
 
 let live = null;
 
+/* THE ROLLOUT STARTS IN CONTACT, NOT AT SPAWN DISTANCE.
+ *
+ * Measured before this existed (HANDOFF 69): over full 2400-step rollouts the
+ * two bodies started ~27 units apart and NEVER closed under a median 22.9,
+ * against a longest measured clear firing line of 9.6 -- so they were never
+ * in a position to hit each other, ~7 rollouts in 8 contained no damage, and
+ * the one channel that can make the Mirror better than the average of its
+ * teacher carried nothing. No reward of any shape can find anything to
+ * reward in a fight that never happens.
+ *
+ * So the practice fight opens where fights ARE: both bodies placed with a
+ * clear line at 4-11 m -- point-blank to a typical duel range, drawn per
+ * rollout so the Mirror trains across ranges rather than at one canned one --
+ * facing each other, clear of walls and of the SWEPT envelope of every mover
+ * (a spot a slab passes through is not clear, wherever the slab is now).
+ * This also trains exactly the states the standoff probe found mute
+ * (HANDOFF 71/74): two bodies with a line at close range is off the
+ * demonstrator's manifold precisely because real approaches are rare in the
+ * teacher's play too.
+ *
+ * Placement draws from its OWN little generator seeded off the rollout seed,
+ * so the game's RNG stream is untouched and a replayed seed replays exactly.
+ * If 200 draws find nothing (a pathological room), the spawn placement
+ * stands: the old behaviour is the fallback, not a throw. */
+function placeInContact(g, seed) {
+  const f = g.foes && g.foes[0], you = g.you;
+  if (!f || !you) return;
+  let s = (seed >>> 0) || 1;
+  const rnd = () => ((s = (s * 1103515245 + 12345) >>> 0) / 4294967296);
+  const CLR = PLAYER.radius + 0.25;
+  const ok = (x, z) => Math.abs(x) < WORLD.AX - 1.2 && Math.abs(z) < WORLD.AZ - 1.2 &&
+                       nearestProp(g.room, x, z, true) > CLR;
+  for (let t = 0; t < 200; t++) {
+    const ax = (rnd() * 2 - 1) * (WORLD.AX - 2), az = (rnd() * 2 - 1) * (WORLD.AZ - 2);
+    if (!ok(ax, az)) continue;
+    const r = 4 + rnd() * 7, ang = rnd() * Math.PI * 2;
+    const bx = ax + Math.cos(ang) * r, bz = az + Math.sin(ang) * r;
+    if (!ok(bx, bz) || blocked(g.room, ax, az, bx, bz)) continue;
+    const dx = bx - ax, dz = bz - az, L = Math.hypot(dx, dz) || 1;
+    you.x = ax; you.z = az; you.hx = dx / L; you.hz = dz / L;
+    f.x = bx; f.z = bz; f.hx = -dx / L; f.hz = -dz / L;
+    return;
+  }
+}
+
 export function beginRehearsal(A, seed, steps, budgetMs) {
   if (!A.opp) A.opp = snapshot(A);
   const g = createGame(seed);
+  placeInContact(g, seed);
   /* practice.js owns the Mirror's body: step() must not sample a second action
      and overwrite the one whose log-probability was just recorded */
   g.externalFoe = 1;
