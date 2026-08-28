@@ -156,6 +156,14 @@ export function report(L, g) {
   line(`             so it removes ${pc(Math.max(0, A.aim))} of what doing nothing costs`);
   line(`    trigger  ${A.fire.toFixed(0)}x more likely to call a shot on a frame`);
   line(`             you shot than on a frame you did not (1x = no idea)`);
+  /* THE ABSOLUTE RATE RIDES BESIDE THE RATIO, because the ratio survives
+     exactly the failure it exists to catch: a uniform collapse of the fire
+     logit empties the gun and leaves the edge reading healthily (the critic
+     bug lived through every session report this way — LEARNINGS 9p). The
+     conditional pair below cannot be fooled like that, and showing both means
+     a disagreement between them is itself a visible finding. */
+  line(`             and it is firing on ${(100 * (A.rateItLine || 0)).toFixed(1)}% of the frames it has you`);
+  line(`             in its sights — you fire on ${(100 * (A.rateYouLine || 0)).toFixed(1)}% of yours`);
   line('');
   line('  Every one is graded BEFORE it is trained on, so none of this is a');
   line('  memory of the training set.');
@@ -285,6 +293,13 @@ function finish(out, line, S, L, g) {
   /* ---- 5. per round — the table that answers "when did it go wrong" ------ */
   line('5 · ROUND BY ROUND');
   line('-'.repeat(64));
+  /* A ROUND ONLY ADVANCES WHEN YOU WIN ONE. The Mirror killing you rerolls
+     the arena inside the same round, so a session can read "round 3" over a
+     Mirror that has landed twenty kills — measured in visible QC: 1 round won
+     against 51 kills in one hour. Without this line every low round number
+     reads as "it never wins", which is exactly backwards. */
+  line('  a round advances only when YOU win it — its kills reroll the arena');
+  line(`  inside the round (its kills this session: ${g.deaths || 0} — the ledger's count)`);
   line('  round   secs   hands   aim   dist  still%  afk%  deaths');
   const byR = new Map();
   for (const s2 of S) { if (!byR.has(s2.r)) byR.set(s2.r, []); byR.get(s2.r).push(s2); }
