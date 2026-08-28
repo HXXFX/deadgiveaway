@@ -139,27 +139,14 @@ export function report(L, g) {
   line('  number underneath was paying out for the fact that a body in motion');
   line('  keeps moving.');
   line('');
-  /* THE HANDS ARE GRADED AT YOUR DECISIONS, and the report says both figures
-     so neither can hide behind the other: frame-for-frame agreement counts
-     the holds, where a held key predicts itself and every answer ties; the
-     change moments are where movement style is visible at all. The gate is
-     decisions SEEN — a player who never changes keys has demonstrated
-     nothing, and that is said in words, not scored as failure. */
-  /* "it matches N% of your key frames" stays on ONE line: AI-09 in the audit
-     reads that exact phrase to check this report against its own rehearsal
-     paragraph, and a line break inside it would blind the check silently. */
-  line(`    hands    frame-for-frame it matches ${pc(A.keysAllRaw)} of your key frames —`);
-  line(`             and so does the best answer needing no learning (${pc(A.keysAllBase)}),`);
-  line(`             because a held key predicts itself.`);
-  line(`             The graded part is your DECISIONS, the moments the keys change:`);
-  if (A.keysDecN > 100) {
-    line(`             at your ${A.keysDecN.toLocaleString()} key changes it called the new set ${pc(A.keysRaw)},`);
-    line(`             the best answer needing no learning gets ${pc(A.keysBase)},`);
-    line(`             so the part it actually learned is ${pc(Math.max(0, A.keys))}`);
-  } else {
-    line(`             you have changed keys ${A.keysDecN} time${A.keysDecN === 1 ? '' : 's'} — too few to grade.`);
-    line(`             It unlocks past 100 decisions watched.`);
-  }
+  line(`    hands    it matches ${pc(A.keysRaw)} of your key frames`);
+  line(`             the best answer needing no learning gets ${pc(A.keysBase)}`);
+  /* WHY THIS FIGURE SWINGS SO HARD. The control reads the keys off the body's
+     own velocity and is right about 97% of the time for a smooth player, so
+     there is only three points of room above it — and the edge divides by
+     that room. Being one point short of the control reads as -33%. */
+  line(`             leaving only ${pc(1 - A.keysBase)} of room above it to win`);
+  line(`             so the part it actually learned is ${pc(Math.max(0, A.keys))}`);
   /* THESE LABELS DESCRIBED THE OLD MEASUREMENT. When the aim became a choice
      among directions the numbers changed meaning and the words did not, so the
      report said "its error 0.8822 rad per frame" about what is now a hit rate.
@@ -207,7 +194,7 @@ export function report(L, g) {
      numbers for one quantity, one of them frozen at whatever it read the day
      the sentence was written. The paragraph above warns about exactly this. */
   line('  and cloned errors compound over a fight — which is why it can match '
-       + pc(A.keysAllRaw));
+       + pc(A.keysRaw));
   line('  of your key frames and still wander. So between rounds it fights a FROZEN');
   line('  COPY OF ITSELF and keeps whatever led to landing a round.');
   line('');
