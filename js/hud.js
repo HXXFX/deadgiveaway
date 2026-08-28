@@ -333,11 +333,11 @@ export function drawLoop(game) {
  * movement style at all because the number underneath was paying out for the
  * fact that a moving body keeps moving.
  */
-/* names only — what each channel measures and its control are prose now, and
-   prose lives in the panel's "?" help (index.html #helpMiss), where it was
-   updated when the hands moved to decision-frame grading. Data kept here goes
-   stale the moment a measurement changes; it did. */
-const TOOK = ['hands', 'aim', 'trigger'];
+const TOOK = [
+  ['hands', 'which keys you hold', 'guessing the key you hold most'],
+  ['aim', 'how you swing the mouse', 'never turning at all'],
+  ['trigger', 'when you shoot', 'firing at your average rate'],
+];
 export function drawMiss(game) {
   const c = $('cMiss'); if (!c) return;
   const { w, h, d } = fitCanvas(c);
@@ -382,7 +382,7 @@ export function drawMiss(game) {
     text(g, d, (v * 100).toFixed(0) + '%', t[0], t[1] - px(d, 5),
          v > 0.02 ? cols[i] : P.ink3, VAL, 900, 'center');
     const b2 = obl(ox, oy, s, i * PITCH + CW / 2, 0, 0);
-    label(g, d, TOOK[i], b2[0], b2[1] + px(d, 12), P.ink3, 9, 'center');
+    label(g, d, TOOK[i][0], b2[0], b2[1] + px(d, 12), P.ink3, 9, 'center');
   }
   label(g, d, A.graded.toLocaleString() + ' frames graded first',
         px(d, 11), px(d, 11), P.ink3, 9);
@@ -697,9 +697,9 @@ export function updateRail(game) {
   }
   const cn = $('copyN');
   if (cn) cn.textContent = A.lessons.toLocaleString() + ' lessons';
-  /* #cmpCap used to be rewritten here every tick with one static sentence —
-     the fairness line, which lives in the panel's "?" help now. The caption in
-     the markup is the caption. */
+  const cap = $('cmpCap');
+  if (cap) cap.textContent = 'It has the same keyboard, the same mouse and the same '
+    + 'view of the map as you. It started with nothing in it.';
 }
 
 /* ---- THE VITALS ----------------------------------------------------------
@@ -839,34 +839,122 @@ export function drawRehearsal(now) {
   const g = c.getContext('2d');
   g.clearRect(0, 0, w, h);
   const n = rhTrail.length / 5;
-  /* the newest sample IS the head: this is the fight happening, not a replay */
   const head = n - 1;
+
+  /* OPTION Q FROM THE DESIGN SHEET, and the reason it replaced two dots and a
+   * pair of trails is that the old picture drew the one thing in a practice
+   * fight that carries no meaning -- where two bodies happen to stand.
+   *
+   * THE CRACK IS WHAT EARNS THE SHARD. The pane at the top is this fight: two
+   * reflections of one room, and the seam between them fractures wherever a
+   * hit landed. The row underneath is the evening: one cell per practice
+   * fight, filled where the fight had something in it and hollow where it did
+   * not. The same event drives both, so the panel answers two questions at
+   * once -- is anything happening NOW, and how much of this pause has been
+   * worth anything TONIGHT.
+   *
+   * It has to fail honestly, which is most of the design: five practice fights
+   * in six contain nothing to learn from and are thrown away unused, so the
+   * usual picture here is an unbroken pane over a row of holes. That is the
+   * truth, and the old panel could not say it. */
   const AX = WORLDX, AZ = WORLDZ;
-  const sx = (x) => (x / AX * 0.46 + 0.5) * w;
-  const sz = (z) => (z / AZ * 0.46 + 0.5) * h;
-  g.strokeStyle = rgba(P.grid, 0.6); g.lineWidth = 1 * d;
-  g.strokeRect(sx(-AX), sz(-AZ), sx(AX) - sx(-AX), sz(AZ) - sz(-AZ));
-  /* the paths, fading behind each body */
-  for (const [off, col] of [[0, P.body], [2, P.hot]]) {
-    g.lineWidth = 1.6 * d;
-    for (let i = Math.max(1, head - 90); i <= head; i++) {
-      const a = (i - Math.max(1, head - 90)) / 90;
-      g.strokeStyle = rgba(col, 0.10 + a * 0.5);
-      g.beginPath();
-      g.moveTo(sx(rhTrail[(i - 1) * 5 + off]), sz(rhTrail[(i - 1) * 5 + off + 1]));
-      g.lineTo(sx(rhTrail[i * 5 + off]), sz(rhTrail[i * 5 + off + 1]));
+  const mid = w / 2, gap = 3 * d;
+  const top = 12 * d, bot = h - 34 * d;
+  const half = mid - gap;
+
+  /* one room, drawn from x=0 so the left copy is a canvas flip and not a
+     second set of coordinates to keep in step */
+  const drawRoom = (col, offX, offZ, kx, kz) => {
+    const F = isoFit(half, bot - top, AX * 0.2, 0.5, AZ * 0.2, 4 * d);
+    const s = F.s, ox = F.ox, oy = F.oy + top;
+    const pt = (x, z) => isoPt(ox, oy, s, (x + AX) * 0.1, 0, (z + AZ) * 0.1);
+    isoPlate(g, ox, oy, s, 0, 0, AX * 0.2, AZ * 0.2, rgba(P.grid, 0.30));
+    g.lineWidth = 1.3 * d;
+    const from = Math.max(1, head - 70);
+    for (let i = from; i <= head; i++) {
+      g.strokeStyle = rgba(col, 0.05 + ((i - from) / 70) * 0.42);
+      const a = pt(rhTrail[(i - 1) * 5 + kx], rhTrail[(i - 1) * 5 + kz]);
+      const b = pt(rhTrail[i * 5 + kx], rhTrail[i * 5 + kz]);
+      g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke();
+    }
+    const at = pt(rhTrail[head * 5 + kx], rhTrail[head * 5 + kz]);
+    isoBox(g, at[0], at[1], s, -0.18, 0, -0.18, 0.36, 0.46, 0.36, col, 1.1 * d);
+  };
+  g.save(); g.beginPath(); g.rect(0, 0, half, h); g.clip();
+  g.translate(half, 0); g.scale(-1, 1);
+  drawRoom(P.cool, 0, 1, 0, 1);
+  g.restore();
+  g.save(); g.beginPath(); g.rect(mid + gap, 0, w - mid - gap, h); g.clip();
+  g.translate(mid + gap, 0);
+  drawRoom(P.hot, 2, 3, 2, 3);
+  g.restore();
+
+  /* THE SEAM, and the cracks in it. Every hit in this fight leaves a fracture,
+     so a pane with nothing on it means nothing happened. */
+  let hits = 0;
+  for (let i = 0; i <= head; i++) {
+    const fl = rhTrail[i * 5 + 4];
+    if (!(fl & 12)) continue;
+    hits++;
+    const mine = (fl & 4) !== 0;
+    const y = top + (bot - top) * (0.16 + 0.68 * ((i * 37 % 101) / 101));
+    const col = mine ? P.hot : P.cool, side = mine ? 1 : -1;
+    for (let k = 0; k < 4; k++) {
+      const len = (6 + k * 4) * d, ang = (-0.85 + k * 0.5) * side;
+      g.strokeStyle = rgba(col, 0.72 - k * 0.13);
+      g.lineWidth = (1.4 - k * 0.22) * d;
+      g.beginPath(); g.moveTo(mid, y);
+      g.lineTo(mid + Math.cos(ang) * len * side, y + Math.sin(ang) * len);
       g.stroke();
     }
     g.fillStyle = col;
-    g.beginPath();
-    g.arc(sx(rhTrail[head * 5 + off]), sz(rhTrail[head * 5 + off + 1]), 3.2 * d, 0, 7);
-    g.fill();
+    g.beginPath(); g.arc(mid, y, 2.2 * d, 0, 7); g.fill();
   }
-  /* a flash on the frames somebody pulled a trigger */
   const shot = rhTrail[head * 5 + 4];
-  if (shot & 1) ring(g, sx(rhTrail[head * 5]), sz(rhTrail[head * 5 + 1]), P.body, d);
-  if (shot & 2) ring(g, sx(rhTrail[head * 5 + 2]), sz(rhTrail[head * 5 + 3]), P.hot, d);
+  const lit = (shot & 3) !== 0;
+  g.strokeStyle = rgba(lit ? P.acid : P.ink3, lit ? 0.75 : 0.26);
+  g.lineWidth = 1.5 * d;
+  g.beginPath(); g.moveTo(mid, top); g.lineTo(mid, bot); g.stroke();
+
+  /* THE EVENING, one cell a practice fight. A hollow cell is one that was
+     thrown away for containing nothing, and there are usually five of those
+     for every one that counted. */
+  const log = (v.log || []).slice(-17);
+  const pad = 7 * d, cells = log.length + 1;
+  const cw = (w - pad * 2) / Math.max(6, cells);
+  const cy = h - 28 * d, ch = 13 * d;
+  for (let k = 0; k < log.length; k++)
+    shardCell(g, pad + k * cw, cy, cw, ch, d, P, log[k], false);
+  shardCell(g, pad + log.length * cw, cy, cw, ch, d, P, hits > 0, true);
+
+  label(g, d, hits ? hits + ' landed \u00b7 this one is kept'
+                   : 'nothing landed yet \u00b7 this one is thrown away',
+        pad, h - 6 * d, hits ? P.acid : P.warm, 9);
 }
+
+/* one practice fight in the evening's mirror: a lit shard if it had something
+   in it, a hollow cell if it did not. The hollow ones were a dashed outline
+   first and vanished at thirteen pixels, which made a row of discards read as
+   an empty row -- the exact opposite of the point. */
+function shardCell(g, x, y, sw, sh, d, P, kept, live) {
+  if (kept) {
+    g.fillStyle = rgba(P.hot, live ? 0.8 : 0.5);
+    g.beginPath();
+    g.moveTo(x + 1 * d, y + sh - 1 * d);
+    g.lineTo(x + sw * 0.42, y + 1 * d);
+    g.lineTo(x + sw - 1.5 * d, y + sh * 0.62);
+    g.closePath(); g.fill();
+    g.strokeStyle = live ? P.acid : rgba(P.body, 0.75);
+    g.lineWidth = (live ? 1.4 : 1) * d; g.stroke();
+  } else {
+    g.fillStyle = rgba(P.grid, 0.45);
+    g.fillRect(x + 1 * d, y + 1 * d, sw - 2.5 * d, sh - 2 * d);
+    g.strokeStyle = rgba(P.ink3, 0.28); g.lineWidth = 1;
+    g.strokeRect(x + 1 * d, y + 1 * d, sw - 2.5 * d, sh - 2 * d);
+  }
+}
+
+
 function ring(g, x, y, col, d) {
   g.strokeStyle = rgba(col, 0.9); g.lineWidth = 1.6 * d;
   g.beginPath(); g.arc(x, y, 7 * d, 0, 7); g.stroke();

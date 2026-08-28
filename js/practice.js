@@ -75,6 +75,14 @@ function makeRoll(n) {
            fire: new Uint8Array(n), bin: new Uint8Array(n), fresh: new Uint8Array(n),
            logp: new Float32Array(n), val: new Float32Array(n),
            rew: new Float32Array(n), done: new Uint8Array(n),
+           /* WHAT ACTUALLY HAPPENED, kept apart from what it was PAID. The
+              zero-mass guard below asks "did anything occur in this fight" and
+              answered it from the total reward -- so any dense shaping term
+              made every rollout look eventful and silently disabled it.
+              Measured: a potential-based aim term took the discard rate from
+              83% to 0%, not by making the fights real but by hiding that they
+              were not. This is the number the guard reads now. */
+           dam: new Float32Array(n),
            adv: new Float32Array(n), ret: new Float32Array(n) };
 }
 
@@ -102,7 +110,7 @@ function snapshot(p) {
    * them. Scratch arrays are allocated fresh rather than shared, or two bodies
    * would write over each other's hidden layer inside one frame. */
   const BUFFERS = new Set(['bx', 'by', 'sx', 'sy', 'lx', 'ly']);
-  const SCRATCH = new Set(['h1', 'h2', 'out', 'rh']);
+  const SCRATCH = new Set(['h1', 'h2', 'out', 'rh', 'decG']);
   for (const k of Object.keys(p)) {
     if (!(p[k] instanceof Float32Array) || BUFFERS.has(k)) continue;
     c[k] = SCRATCH.has(k) ? new Float32Array(p[k].length) : p[k].slice();
@@ -136,7 +144,7 @@ function gae(r, lastV) {
      trained on that suppresses whatever it does most, which is how one that had
      learned to shoot stops shooting. */
   let mass = 0;
-  for (let t = 0; t < r.n; t++) mass += Math.abs(r.rew[t]);
+  for (let t = 0; t < r.n; t++) mass += Math.abs(r.dam[t]);
   if (mass < 1e-6) return false;
 
   let last = 0;
@@ -205,6 +213,7 @@ export const rehearsalBusy = () => !inSlice && !!(live && live.phase !== 'done')
 export function rehearsalView() {
   if (!live) return null;
   return { trail: live.trail, i: live.i, steps: live.steps, phase: live.phase,
+           log: live.A.rehearsalLog || [],
            /* how far through the pause it is, for the card */
            done: live.budget ? Math.min(1, live.spent / live.budget)
                              : Math.min(1, live.i / Math.max(1, live.steps)) };
@@ -221,6 +230,9 @@ function oneFrame(L) {
     /* a respawn is not a hit: re-baseline both health readings */
     L.prevOpp = PLAYER.hp;
     L.prevOwn = (f && !f.dead) ? f.hp : PLAYER.hp;
+    /* and the death flags with them, or the respawn frame reads as a fresh
+       kill and pays +100 for a body that was already down */
+    L.prevOppDead = 0; L.prevOwnDead = 0;
     return !!f;
   }
 
@@ -276,8 +288,56 @@ function oneFrame(L) {
   const oppHp = g.you.dead ? 0 : g.you.hp;
   const ownHp = f.dead ? 0 : f.hp;
   let rew = ((L.prevOpp - oppHp) - (L.prevOwn - ownHp)) * 10;
+  /* WHO IT LANDED ON, CAPTURED WHILE THE DELTAS STILL EXIST. The trail carried
+     a fire flag and nothing else, so the panel could show two bodies shooting
+     and never show a hit -- the one event the whole pause turns on. Read after
+     prevOpp is rebaselined it is always zero, which is the same
+     take-the-reading-before-the-action trap that disabled the trigger
+     calibration for the life of the project. */
+  /* ACCUMULATED BETWEEN TRAIL SAMPLES, NOT READ AT ONE. A hit lasts a single
+     frame and the trail is sampled every TRAIL_EVERY frames, so a flag read at
+     sample time misses almost all of them -- measured, 190 frames of shooting
+     and zero hits recorded in a rollout that definitely landed some. The flags
+     are held until the sample that carries them away. */
+  if (L.prevOpp > oppHp) L.hitIt = 1;
+  if (L.prevOwn > ownHp) L.hitYou = 1;
   L.prevOpp = oppHp; L.prevOwn = ownHp;
+  /* AND THE TWO OUTCOMES THAT WERE NEVER PAID FOR AT ALL.
+     Until now the only reward in the game was damage, so FINISHING a body was
+     worth exactly the last point of health taken off it and nothing more --
+     the one event the whole game is about was indistinguishable from a graze.
+     A kill is 3 points of damage, so +100 against damage's +10 a point makes
+     closing worth about three times the chipping that got there. Symmetric on
+     its own death: both bodies in a rehearsal run the same policy, and an
+     asymmetric penalty teaches both copies to trade themselves away. */
+  const oppDead = g.you.dead ? 1 : 0, ownDead = f.dead ? 1 : 0;
+  if (oppDead && !L.prevOppDead) rew += 100;
+  if (ownDead && !L.prevOwnDead) rew -= 100;
+  L.prevOppDead = oppDead; L.prevOwnDead = ownDead;
   L.rDam = (L.rDam || 0) + rew;
+  roll.dam[t] = rew;
+  /* AND WHO IT LANDED ON, for the panel. The trail carried a fire flag only,
+     so the picture could show two bodies shooting and never show a hit --
+     which is the one event the whole pause turns on. */
+                 /* the outcome half, before any shaping */
+  /* ---- THE SHAPING, AND WHICH KIND OF IT ---------------------------------
+     Three variants, measured against each other on DAMAGE (L.rDam) rather than
+     on total reward -- scoring a shaped run by its own shaping would just
+     reward whoever was paid most. See dev_log/audit/probe-shaping.html. */
+  if (A.shapeMode === 'aim') {
+    /* POTENTIAL-BASED. phi is the cosine between where the learner is pointing
+       and where the opponent actually is: +1 aimed straight at them, -1 away.
+       Paying gamma*phi' - phi pays for TURNING TOWARD and charges for turning
+       away, and over a whole episode it telescopes to almost nothing, so it
+       cannot become a thing to farm instead of winning. */
+    const adx = g.you.x - f.x, adz = g.you.z - f.z;
+    const adl = Math.hypot(adx, adz) || 1;
+    const phi = (f.hx * adx + f.hz * adz) / adl;
+    const d = 5 * (PPO.GAMMA * phi - (A.shapePhi || 0));
+    A.shapePhi = phi;
+    rew += d;
+    L.rShape = (L.rShape || 0) + d;
+  } else if (A.shapeMode !== 'none') {
   /* AND THE NEAR MISSES — CENTRED, AND CHARGED BOTH WAYS.
    *
    * Why any shaping at all: a hit lands about once in five simulated minutes, so
@@ -317,14 +377,24 @@ function oneFrame(L) {
     L.rShape = (L.rShape || 0) + d;
     L.nShots = (L.nShots || 0) + 1;
   }
+  }
   roll.rew[t] = rew;
   roll.done[t] = (g.you.dead || f.dead) ? 1 : 0;
 
   /* A TRAIL, so the between-round card can show the player what the pause IS.
      The rehearsal is a real fight; the honest way to explain it is to play it
      back rather than to draw a spinner over it. */
-  if ((L.i % TRAIL_EVERY) === 0 && L.trail.length < 1600)
-    L.trail.push(g.you.x, g.you.z, f.x, f.z, (ya.fire ? 1 : 0) + (ia.fire ? 2 : 0));
+  /* BRACES, because the clear belongs to the SAMPLE and not to the frame. The
+     `if` was braceless when the hit flags were added, so the two clears ran on
+     every frame and wiped each hit before the next sample could carry it --
+     the accumulation fix accumulating nothing, which looked exactly like the
+     bug it was meant to fix. */
+  if ((L.i % TRAIL_EVERY) === 0 && L.trail.length < 1600) {
+    L.trail.push(g.you.x, g.you.z, f.x, f.z,
+                 (ya.fire ? 1 : 0) + (ia.fire ? 2 : 0) +
+                 (L.hitIt ? 4 : 0) + (L.hitYou ? 8 : 0));
+    L.hitIt = 0; L.hitYou = 0;
+  }
   return true;
 }
 
@@ -366,6 +436,7 @@ export function stepRehearsal(budgetMs) {
       for (let t = 0; t < roll.n; t++) L.total += roll.rew[t];
       if (!gae(roll, lastV)) {
         A.rehearsalsSkipped = (A.rehearsalsSkipped || 0) + 1;
+        if (A.rehearsalLog) { A.rehearsalLog.push(0); if (A.rehearsalLog.length > 64) A.rehearsalLog.shift(); }
         L.result = { frames: roll.n, reward: 0, skipped: 1,
                      damage: L.rDam || 0, shaping: L.rShape || 0, shots: L.nShots || 0 };
         L.phase = 'done';
@@ -416,6 +487,7 @@ export function stepRehearsal(budgetMs) {
         A.rewShaping = (A.rewShaping || 0) + (L.rShape || 0);
         A.rewShots = (A.rewShots || 0) + (L.nShots || 0);
         A.rehearsals = (A.rehearsals || 0) + 1;
+        if (A.rehearsalLog) { A.rehearsalLog.push(1); if (A.rehearsalLog.length > 64) A.rehearsalLog.shift(); }
         A.rehearsedFrames = (A.rehearsedFrames || 0) + roll.n;
         A.lastRehearsalReward = L.total;
         A.opp = snapshot(A);          /* the copy becomes what just learned */
