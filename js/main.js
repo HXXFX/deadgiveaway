@@ -44,6 +44,13 @@ if (_q.has('marker')) game.marker = _q.get('marker');
 /* `?watch=1` starts the ghost fight immediately, which is the only way a
    headless screenshot can catch a kill: nobody is there to pull a trigger. */
 if (_q.get('watch') === '1') { _unattended = true; setTimeout(() => setWatch(true), 60); }
+/* ?unattended=1 LIFTS THE BLUR-PAUSE WITHOUT CHOOSING WHAT IS PLAYED. Before
+   this existed the only way to stop an automated browser freezing on blur was
+   ?watch=1 -- which also switches to Mirror-vs-Mirror, so a harness that wanted
+   to drive the PLAYER and lose a round could not have one without the other.
+   It would sit at full health forever, and the frozen game looked like an AI
+   that had stopped shooting. Dev-only, changes no rule of play. */
+if (_q.get('unattended') === '1') _unattended = true;
 const input = { keys: new Set(), camera: 'top', aim: null, firing: false };
 const mouse = { x: 0, y: 0 };
 /* the reticle replaces the system cursor, so it must not be left painted on
