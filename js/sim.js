@@ -25,7 +25,7 @@ const HARD_MAX = 2400;   /* what QC replays; the page stops on the clock first *
 /* how long a fight may go with NO line either way and NO shot fired before the
    arena is assumed to be the problem. Not a round timer — see below. */
 const DEADLOCK_MS = 40000;
-import { makeAgent, see, learn, act, studyOnce, studyBeat, noteSelf, endLife,
+import { makeAgent, see, learn, act, studyOnce, studyBeat, noteSelf, endLife, endYouLife,
          noteFired, reward, driveTick,
          agentScore, aimBinOf, OBS, ACT, NAIM, RELOAD, MAX_TURN } from './agent.js';
 
@@ -70,7 +70,12 @@ export function createGame(seed) {
        silently does nothing — which reads as dead input, on the one click that
        makes the first impression. */
     you: { x: -8, z: 4, vx: 0, vz: 0, hx: 0, hz: -1, hp: PLAYER.hp, dead: 0,
-           lastShot: -PLAYER.fireEvery, ammo: MAG.size, reloadUntil: 0 },
+           /* maxHp for the same reason the other two bodies carry it: every
+              reader of it falls back to FOE.hp, which happens to equal
+              PLAYER.hp today and would silently compute YOUR health against
+              the Mirror's ceiling the day they differ. Found by AI-10. */
+           lastShot: -PLAYER.fireEvery, ammo: MAG.size, reloadUntil: 0,
+           maxHp: PLAYER.hp },
     foes: [],
     ghost: null,          /* only in watch mode: an agent piloted by the model */
     shots: [],            /* rounds in flight, from either hand */
@@ -224,8 +229,21 @@ function spawnGhost(g) {
      read "it lasted 0 rounds" no matter how well the copy of you had done,
      which is the one number that card exists to show. */
   const kept = g.ghost ? g.ghost.rounds : 0;
+  /* A WHOLE BODY, NOT HALF OF ONE. This was built without ammo, without a
+     magazine timer and without a lastShot -- so `shoot()` refused EVERY round
+     it ever tried to fire (`(who.ammo || 0) <= 0` is true for undefined), and
+     its observation reported an empty gun on every frame of its life. Watch
+     mode therefore showed two bodies circling each other and never shooting,
+     which is exactly what the owner reported.
+     THIS IS THE THIRD TIME A BODY HAS SHIPPED MISSING A FIELD ITS SIBLINGS
+     HAVE. spawnFoes lacked `lastShot` and lost one shot a round (audit AI-05);
+     spawnFoes lacked a field its own comment described. Both real bodies are
+     built with maxHp, ammo, reloadUntil and lastShot: anything that fights
+     gets all four, and `lastShot: -PLAYER.fireEvery` so its first trigger pull
+     is not eaten by the cadence check at now = 0. */
   g.ghost = { x: sp[0], z: sp[1], vx: 0, vz: 0, hx: 0, hz: -1,
-              hp: PLAYER.hp, dead: 0, last: 0, rounds: kept };
+              hp: PLAYER.hp, maxHp: PLAYER.hp, dead: 0, last: 0, rounds: kept,
+              ammo: MAG.size, reloadUntil: 0, lastShot: -PLAYER.fireEvery };
 }
 
 export function setMode(g, mode) {
@@ -261,7 +279,39 @@ export function reviveRound(g) {
   g.reroll = (g.reroll || 0) + 1;   /* or it respawns into the same trap */
   g.roundStartedAt = g.now;
   g.deadlockSince = g.now;
-  endLife(g.A);                     /* that life is over, however it ended */
+  endLife(g.A); endYouLife(g.A);                     /* that life is over, however it ended */
+  /* AND IT STUDIES AFTER LOSING, WHICH IT NEVER DID.
+   *
+   * The study beat and the practice fight lived only in the round-WON path, so
+   * the one channel that can make the Mirror better than the average of you
+   * opened only when you were already beating it. A player who is struggling
+   * gave it no chance to improve at all -- measured across a 30-round session,
+   * 27 rehearsals for 29 player wins and none for the 3 losses.
+   *
+   * Seeded off `reroll` rather than `round`, because a loss does not advance
+   * the round: seeding on the round alone would hand it the same practice
+   * fight it just had.
+   *
+   * Worth stating plainly, since it cuts against the player: this makes the
+   * Mirror improve after it kills you, not only after you kill it. That is the
+   * owner's call and the reason is theirs -- the alternative is a Mirror that
+   * can only get better at beating someone who is already winning. */
+  let passes = 0;
+  if (g.A.n >= 60) passes += studyBeat(g.A, 400);
+  /* !rehearsalBusy() BECAUSE A SECOND DEATH MUST NOT DISCARD THE FIRST ONE'S
+     WORK. beginRehearsal overwrites `live` unconditionally, so a revive while
+     one is still in flight throws away a part-finished fight and its gradient
+     -- silently, since the panel simply restarts and looks fine. Cheap here,
+     load-bearing headless: there a whole practice fight runs inside one step(),
+     so an ungated revive turns every death into thousands of extra steps and
+     the QC run stops looking hung and starts BEING hung. */
+  if (g.A.n >= 600 && !g.noRehearse && !rehearsalBusy())
+    beginRehearsal(g.A, (g.seed + (g.reroll || 0) * 6151) >>> 0, HARD_MAX,
+                   g.headless ? 0 : PAUSE_MS);
+  g.studied = { passes, moves: g.A.n };
+  g.log.studyPasses += passes; g.log.studyBeats++;
+  logEvent(g.log, g, 'studied', { note: passes + ' passes over ' + g.A.n +
+                                        ' frames of you, after losing' });
   newRoom(g, true);
   return true;
 }
@@ -502,6 +552,13 @@ export function step(g, input, dtMs) {
     applyKeys(g, f, a.keys, DT, FOE.radius, 'top', a.aim);
     /* the trigger goes through the same shoot() the player's does, and is held
        to the same 190 ms by the same line of code */
+    /* THE CADENCE IS READ BEFORE THE SHOT, NOT AFTER IT. shoot() sets
+       f.lastShot, so a couldFire computed afterwards asks "has fireEvery
+       elapsed since the shot I just took" -- which is false by construction on
+       exactly the frames that fired. See the couldFire guard below: taking the
+       reading after the action excluded every positive sample from the trigger
+       calibration and pinned its measured rate at zero. */
+    const lastShotBefore = f.lastShot || 0;
     const fired = a.fire && shoot(g, f);
     /* AND ITS OWN RELOAD, through the same reload() the player's key calls. It
        gets no help and no special case: if it never learns to reload early it
@@ -527,8 +584,18 @@ export function step(g, input, dtMs) {
        readout. A number nobody displays cannot be noticed going wrong. */
     g.stats.foeAliveFrames = (g.stats.foeAliveFrames || 0) + 1;
     if ((f.ammo || 0) <= 0) g.stats.foeEmptyFrames = (g.stats.foeEmptyFrames || 0) + 1;
+    /* AND THIS IS WHY IT USES lastShotBefore. Written with f.lastShot it read
+       the value shoot() had just written, so `couldFire` was false on every
+       frame the Mirror actually fired -- the controller saw didFire=false 2122
+       times out of 2122 in a measured session, both of its rates sat at exactly
+       0.000%, and biasBlind never moved off 0.00. A calibration that cannot see
+       a positive sample cannot calibrate: the Mirror fired blind on 95-100% of
+       its shots against players who never fire blind, and the loop written to
+       stop that had been measuring nothing. Same shape as the reload flag that
+       lived in the keydown handler -- take the reading where the thing happens,
+       and before the thing changes what you are reading. */
     const couldFire = (f.ammo || 0) > 0 && !(f.reloadUntil > g.now)
-                      && (g.now - (f.lastShot || 0)) >= PLAYER.fireEvery;
+                      && (g.now - lastShotBefore) >= PLAYER.fireEvery;
     if (couldFire) noteFired(g.A, fired, lineNow);
     /* ITS OWN FRAME, held pending until the life it belongs to can be scored.
        Built exactly the way the player's is built above — same keys, same
@@ -619,6 +686,11 @@ export function step(g, input, dtMs) {
       if (!s.mine) g.A.lifeOut += dmg; else g.A.lifeIn += dmg;
       /* and against the decision that caused it, for the per-frame gate */
       g.A.pendRew += s.mine ? -dmg : dmg;
+      /* AND THE SAME LEDGER FROM YOUR SIDE, which is the opposite sign: your
+         shot landing is a good moment of yours, its shot landing is a bad one.
+         This is what lets the study prefer your best frames over your average
+         ones -- see endYouLife() in agent.js. */
+      g.A.youPend += s.mine ? dmg : -dmg;
       /* FLOORED AT ZERO. A two-damage core hit on a one-health body left
          hp = -1 -- caught by the stress fleet's INV-HEALTH on 11 of 36 games.
          Death itself was unaffected (the check is <= 0), but every reader of
@@ -627,7 +699,7 @@ export function step(g, input, dtMs) {
       splat(g.room, t.x, t.z, g.splatN++, false);
       if (g.mode === 'play' && t === g.you) g.stats.hitsTaken++;
       if (t.hp <= 0 && t !== g.you && t !== g.ghost) {
-        endLife(g.A);
+        endLife(g.A); endYouLife(g.A);
         t.dead = g.now; t.fell = Math.atan2(t.hz, t.hx);
         splat(g.room, t.x + t.hx * 0.5, t.z + t.hz * 0.5, g.splatN++, true);
         g.log.you.kills = (g.log.you.kills || 0) + 1;
@@ -700,7 +772,7 @@ export function step(g, input, dtMs) {
     g.reroll = (g.reroll || 0) + 1;      /* or it is handed the same trap again */
     /* the life it was living is over whether or not anybody killed it, and a
        half-recorded life scored against a full one is not a comparison */
-    endLife(g.A);
+    endLife(g.A); endYouLife(g.A);
     logEvent(g.log, g, 'stalemate',
       { note: 'neither of you could see or shoot the other for ' +
               Math.round(DEADLOCK_MS / 1000) + ' s — new arena' });
@@ -730,7 +802,7 @@ export function step(g, input, dtMs) {
     /* Headless QC runs a fixed number of steps so a session replays exactly;
        the page runs for a fixed number of MILLISECONDS so the pause is the same
        length on every machine. See PAUSE_MS in practice.js. */
-    if (g.A.n >= 600 && !g.noRehearse)
+    if (g.A.n >= 600 && !g.noRehearse && !rehearsalBusy())
       beginRehearsal(g.A, (g.seed + g.round * 7919) >>> 0, HARD_MAX,
                      g.headless ? 0 : PAUSE_MS);
     g.studied = { passes, moves: g.A.n };
@@ -872,6 +944,11 @@ function moveGhost(g, DT) {
   gh.keys = a.keys;
   applyKeys(g, gh, a.keys, DT, PLAYER.radius, 'top', a.aim);
   if (a.fire) shoot(g, gh);
+  /* AND ITS RELOAD, which it also never had. The policy decides this like any
+     other action and the Mirror's own update honours it; the ghost dropped it
+     on the floor, so even once it had a magazine it would have emptied it and
+     stopped. Same call the Mirror makes, through the same function. */
+  if (a.reload) reload(g, gh);
 }
 
 
