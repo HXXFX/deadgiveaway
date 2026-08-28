@@ -494,6 +494,10 @@ export function makeAgent(seed) {
        against a player who never fires blind pushes it straight down. */
     rateYouLine: 0, rateYouBlind: 0,
     rateItLine: 0, rateItBlind: 0, biasLine: 0, biasBlind: 0,
+    /* running mean of the PRE-bias fire logit on could-fire frames, split by
+       line, plus sample counts so the first reading seeds the mean instead of
+       averaging against a fictitious zero. The trigger solve reads these. */
+    logitLine: 0, logitBlind: 0, logitLineN: 0, logitBlindN: 0,
     bigErr: 0, bigBase: 0, bigN: 0, smErr: 0, smBase: 0, smN: 0,
     mOY: 0, mOO: 0, mYY: 0, mIY: 0, mII: 0,
     augRate: new Float64Array(4), augN: 0,
@@ -1096,7 +1100,70 @@ function nfStep(got, want, bias) {
     return clamp(bias + clamp((want - got) / scale, -1, 1) * NF.GAIN, -NF.LIM, NF.LIM);
   }
 
-export function noteFired(p, didFire, hadLine) {
+export function noteFired(p, didFire, hadLine, rawLogit) {
+  /* THE INTEGRATOR STAYS. The solve below was built to replace it and LOST
+     its own paired A/B (dev_log/audit/probe-trig.html, 6 personas x 300 s,
+     2026-08-28): median rms log-ratio 1.411 against the integrator's 0.655,
+     1 win in 6 pairs, with sessions landing at 0.05x and 3.67x of the
+     player's rate -- a tight spread around the WRONG value, which is the
+     TRIG_K=4 failure again wearing an equation. The mean-field step is where
+     it breaks: the fire logits are spread over several units, so the rate at
+     the MEAN logit is not the mean RATE, and the gap lands differently on
+     every trained policy. Kept behind `solveTrig` for future control work;
+     the oscillation it was meant to cure (0.27x..2.36x over an hour, HANDOFF
+     73) is still open, and still preferable to being confidently wrong. */
+  if (p.solveTrig && rawLogit !== undefined) return noteFiredSolve(p, didFire, hadLine, rawLogit);
+  return noteFiredWalk(p, didFire, hadLine);
+}
+
+/* THE SOLVE. The integrator above it is kept behind `oldTrig` for ablation.
+ *
+ * The TRIG_K=4 experiment (above) established the decisive fact: the NET
+ * learns the player's rate correctly -- backing the bias out left 7.4% for a
+ * sprayer's Mirror and 0.8% for a tapper's -- and the integrator then drags
+ * both toward a common value. And the visible-QC run measured what the
+ * integrator does when it neither dies nor flattens: it OSCILLATES, swinging
+ * the Mirror between 0.27x and 2.36x of the player's rate across one hour,
+ * biasLine wandering 0.02..3.12, because it pushes until its own lagging EMA
+ * catches up and then discovers it has pushed twice as far as needed.
+ *
+ * So: stop walking, solve. The trigger fires with sig(logit + bias); hold a
+ * running mean of the logit on the same frames the rate is measured on, and
+ * the bias that makes the MEAN fire probability equal the player's rate is
+ * simply logit(target) - meanLogit. Computed, not integrated: it cannot wind
+ * up, cannot overshoot its own measurement, and cannot freeze at a clamp the
+ * way the old loop did when both rates hit zero -- the mean logit updates on
+ * every could-fire frame whether or not the trigger goes, so the deadlock
+ * "it stopped firing, so nothing updates, so it never fires again" has no
+ * closed loop to live in. A mean-field approximation: exact for a constant
+ * logit, slightly optimistic for a spread of them (Jensen), which against the
+ * 2.4x swings it replaces is noise.
+ *
+ * The blend (0.25 toward the solved value per sample) is smoothing, not
+ * control: the inputs are EMAs with tau ~11 s of line-time, and snapping the
+ * bias to every twitch of a noisy mean would put that noise straight on the
+ * trigger. Fifteen-ish samples to settle, against ~4000 for the walk. */
+function noteFiredSolve(p, didFire, hadLine, rawLogit) {
+  const A = NF.A;
+  const solve = (target, mean) => {
+    const tgt = clamp(target, 1e-4, 0.5);
+    return clamp(Math.log(tgt / (1 - tgt)) - mean, -NF.LIM, NF.LIM);
+  };
+  if (hadLine) {
+    p.rateItLine = p.rateItLine * (1 - A) + (didFire ? A : 0);
+    p.logitLineN++;
+    p.logitLine = p.logitLineN === 1 ? rawLogit : p.logitLine * (1 - A) + rawLogit * A;
+    p.biasLine += 0.25 * (solve(p.rateYouLine, p.logitLine) - p.biasLine);
+  } else {
+    p.rateItBlind = p.rateItBlind * (1 - A) + (didFire ? A : 0);
+    p.logitBlindN++;
+    p.logitBlind = p.logitBlindN === 1 ? rawLogit : p.logitBlind * (1 - A) + rawLogit * A;
+    p.biasBlind += 0.25 * (solve(p.rateYouBlind, p.logitBlind) - p.biasBlind);
+  }
+  p.rateIt = p.rateIt * (1 - A) + (didFire ? A : 0);
+}
+
+function noteFiredWalk(p, didFire, hadLine) {
   /* LIM USED TO BE 15, AND THAT IS WHY IT COULD NOT COME BACK.
    *
    * This is an integrator: the bias walks at GAIN per frame while the error is
@@ -1643,7 +1710,7 @@ export function act(p, x, prevKeys, rnd, frame) {
      same rule the keys already follow, for the same reason: a hand does not
      re-decide sixty times a second. */
   const doReload = fresh ? rnd() < rp : false;
-  const out = { keys, aim, fire, fireP: fp, aimOff: off, aimBin: bin,
+  const out = { keys, aim, fire, fireP: fp, rawFire: o[4], aimOff: off, aimBin: bin,
                 reload: doReload, reloadP: rp,
                 aimP: Array.from(AP, (v) => v / z),
                 keyP: [sig(o[0]), sig(o[1]), sig(o[2]), sig(o[3])],

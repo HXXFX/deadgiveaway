@@ -596,7 +596,7 @@ export function step(g, input, dtMs) {
        and before the thing changes what you are reading. */
     const couldFire = (f.ammo || 0) > 0 && !(f.reloadUntil > g.now)
                       && (g.now - lastShotBefore) >= PLAYER.fireEvery;
-    if (couldFire) noteFired(g.A, fired, lineNow);
+    if (couldFire) noteFired(g.A, fired, lineNow, a.rawFire);
     /* ITS OWN FRAME, held pending until the life it belongs to can be scored.
        Built exactly the way the player's is built above — same keys, same
        "did the trigger actually go off", same aim bin relative to the bearing —

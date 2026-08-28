@@ -120,6 +120,7 @@ function snapshot(p) {
   /* the readout calibrations travel with the weights, or the copy fights with a
      trigger discipline it never learned */
   for (const k of ['biasLine', 'biasBlind', 'rateYouLine', 'rateYouBlind',
+                   'logitLine', 'logitBlind', 'logitLineN', 'logitBlindN',
                    'turnS', 'sigma', 'drive', 'deadband', 'noVel'])
     c[k] = p[k];
   c.rnd = p.rnd;
