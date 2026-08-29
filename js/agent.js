@@ -92,7 +92,38 @@ export const RAY_MAX = 20;       /* metres; past this the room is "open" */
  *
  * Levelling UP rather than down: both sides now know the same things, rather
  * than the player being made blinder to match. */
-export const OBS = 38;
+/* 43: the last five are the short memory and the protection flags (2026-08-28).
+ *
+ * The owner's movement score sat at 0% across whole sessions while machine
+ * players reached 39-47%, and the likeliest reason is that this policy decided
+ * from ONE FRAME: a habit that lives in rhythm -- how long you hold a key, how
+ * you swing the mouse through a turn, your stop-start cadence -- has no
+ * observable cause in a single frame, and a habit with no observable cause is
+ * unlearnable (the scripted timer-jinker scored 0 for exactly this reason).
+ *
+ * So the body now carries a short memory, and the vector carries five more:
+ *
+ *   out[38]  how long since MY held keys last changed (0..1 over 2 s)
+ *   out[39]  MY heading's turn rate, signed, smoothed over ~150 ms
+ *   out[40]  MY speed, smoothed over ~400 ms (stop-start cadence)
+ *   out[41]  the OTHER body is under spawn protection right now (0/1)
+ *   out[42]  MY OWN spawn protection remaining (0..1)
+ *
+ * WHY THESE AND NOT "PREVIOUS KEYS": out[23]/[24] were zeroed by `noVel`
+ * because velocity direction is the previous action in disguise, and a net
+ * handed its previous action stops looking at the room. These five carry
+ * TIMING and DYNAMICS, not direction: none of them says which key is down,
+ * so the echo shortcut stays closed while the rhythm becomes visible.
+ *
+ * The protection flags are the owner's fairness rule "it knows what I know":
+ * the player reads the SAFE badge off the header; the session video showed
+ * the Mirror emptying its magazine into a protected body it could not hurt.
+ *
+ * APPEND-ONLY: every index up to 37 is unchanged, so every comment, criterion
+ * and solve that names an index stays true. Seed-for-seed QC numbers shift
+ * (the weight-init stream is longer), so compare categories across builds,
+ * not exact figures. `noMem: 1` on the agent zeroes all five for ablation. */
+export const OBS = 43;
 /* one life, held back until it can be scored: sixty seconds is longer than any
    life measured in a session, so nothing is lost by being generous here */
 const LIFE_BUF = 3600;
@@ -202,7 +233,44 @@ export function see(out, room, me, foe, lineClear, losFor, sinceFire, threat, no
   out[37] = foeCond ? clamp(foeCond.ammo, 0, 1) : 1;
   out[33] = clamp(Math.atan2(me.hx * dz - me.hz * dx,
                              me.hx * dx + me.hz * dz) * 3, -1, 1);
+  /* the short memory, maintained on the body by memTick() each frame */
+  out[38] = clamp((me.mSince || 0) / 2, 0, 1);
+  out[39] = clamp((me.mTurn || 0) / 6, -1, 1);
+  out[40] = clamp(me.mSpd || 0, 0, 1);
+  out[41] = foeCond && foeCond.grace ? 1 : 0;
+  out[42] = clamp(me.mGrace || 0, 0, 1);
   return out;
+}
+
+/* held keys as four bits, for cheap same-or-changed comparison */
+export function keysToBits(keys) {
+  if (!keys) return 0;
+  return (keys.has('w') ? 1 : 0) | (keys.has('a') ? 2 : 0) |
+         (keys.has('s') ? 4 : 0) | (keys.has('d') ? 8 : 0);
+}
+
+/* THE BODY'S SHORT MEMORY, one call per body per frame, BEFORE see().
+ *
+ * Everything see() reads at out[38..42] is computed here and stored on the
+ * body, so see()'s signature does not change and every caller stays honest by
+ * construction: a body whose memTick was skipped shows a memory of zeros, the
+ * same thing the ablation flag produces on purpose.
+ *
+ * `off` (from agent.noMem) zeroes the lot -- the paired-ablation switch, so
+ * "did the memory help" is a measurement and not a story. */
+export function memTick(me, keysBits, now, dt, protectUntil, off) {
+  if (off) { me.mSince = 0; me.mTurn = 0; me.mSpd = 0; me.mGrace = 0; me.mKeys = keysBits; return; }
+  if (keysBits !== me.mKeys) { me.mKeys = keysBits; me.mSince = 0; }
+  else me.mSince = (me.mSince || 0) + dt;
+  /* signed angle the heading swept this frame, smoothed to ~150 ms */
+  const cross = (me.mHx || 1) * me.hz - (me.mHz || 0) * me.hx;
+  const dot = (me.mHx || 1) * me.hx + (me.mHz || 0) * me.hz;
+  const swept = Math.atan2(cross, dot) / Math.max(dt, 1e-3);
+  me.mTurn = (me.mTurn || 0) * 0.9 + swept * 0.1;
+  me.mHx = me.hx; me.mHz = me.hz;
+  me.mSpd = (me.mSpd || 0) * 0.96 + (Math.hypot(me.vx || 0, me.vz || 0) / PLAYER.speed) * 0.04;
+  me.mGrace = protectUntil && protectUntil > now
+    ? (protectUntil - now) / (PLAYER.spawnProtect || 3000) : 0;
 }
 
 /* ---- what a body can do -------------------------------------------------- */
@@ -1088,7 +1156,7 @@ const TRIG_K = 1;   /* 4 was tried, both ways; see the measurements below */
    the loop that exists to fix a different problem (blind versus line).
    Whatever fixes this is a control-design change, not a constant. */
 const NF = { A: 0.0015 * TRIG_K, GAIN: 0.004, LIM: 8 };
-function nfStep(got, want, bias) {
+function nfStep(p, got, want, bias) {
     /* NO EVIDENCE MEANS RELAX, NOT HOLD.
      *
      * This is an integrator, and an integrator with nothing to integrate keeps
@@ -1105,6 +1173,13 @@ function nfStep(got, want, bias) {
     if (Math.max(want, got) < NF.A * 0.5)
       return bias - Math.sign(bias) * Math.min(Math.abs(bias), NF.GAIN * 0.25);
     const scale = Math.max(want, got, 1e-4);
+    /* A +-15% DEAD BAND WAS TRIED HERE AND MEASURED A NULL (probe-trig
+       ?ab=deadband, six paired persona-seeds, 2026-08-28): four pairs came
+       back byte-identical because the error almost never sits inside the
+       band -- the remaining wobble lives OUTSIDE it, in the lag between the
+       bias moving and its own EMAs noticing. A wider band would stop real
+       corrections. Removed; whatever calms this loop must address the lag,
+       not the noise floor. */
     return clamp(bias + clamp((want - got) / scale, -1, 1) * NF.GAIN, -NF.LIM, NF.LIM);
   }
 
@@ -1214,12 +1289,12 @@ function noteFiredWalk(p, didFire, hadLine) {
        grow the known wall-spraying regression (HANDOFF 75), so it still
        tracks your current behaviour. `noRatchet: 1` restores the old target
        for ablation. */
-    p.biasLine = nfStep(p.rateItLine,
+    p.biasLine = nfStep(p, p.rateItLine,
                         p.noRatchet ? p.rateYouLine : Math.max(p.rateYouLineBest || 0, p.rateYouLine),
                         p.biasLine);
   } else {
     p.rateItBlind = p.rateItBlind * (1 - A) + (didFire ? A : 0);
-    p.biasBlind = nfStep(p.rateItBlind, p.rateYouBlind, p.biasBlind);
+    p.biasBlind = nfStep(p, p.rateItBlind, p.rateYouBlind, p.biasBlind);
   }
   p.rateIt = p.rateIt * (1 - A) + (didFire ? A : 0);
 }

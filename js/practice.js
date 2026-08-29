@@ -35,7 +35,7 @@
 import { createGame, step, shoot, applyKeys } from './sim.js';
 import { WORLD, PLAYER, FOE, MAG } from './config.js';
 import { blocked, nearestProp } from './room.js';
-import { see, act, ppoBatch, studyBeat, PPO, OBS } from './agent.js';
+import { see, act, ppoBatch, studyBeat, PPO, OBS, memTick, keysToBits } from './agent.js';
 
 const TRAIL_EVERY = 6;          /* frames between trail samples for the card */
 /* imitation steps run against each minibatch of policy gradient. One minibatch
@@ -292,10 +292,12 @@ function oneFrame(L) {
      ever runs dry, reloads, or is nearly dead -- while the live game feeds it
      the real numbers. Training on one distribution and running on another is
      the oldest way to make a policy worse and have nothing look wrong. */
+  memTick(g.you, keysToBits(g.youKeys), g.now, DT, g.protectUntil, A.noMem);
   see(L.obsYou, g.room, g.you, f, youLine, g.self.losOpen, g.self.sinceFire,
       g.self.threat, A.noVel,
       { ammo: (g.you.ammo || 0) / MAG.size, reloading: g.you.reloadUntil > g.now },
-      { hp: (f.hp || 0) / (f.maxHp || FOE.hp), ammo: (f.ammo || 0) / MAG.size });
+      { hp: (f.hp || 0) / (f.maxHp || FOE.hp), ammo: (f.ammo || 0) / MAG.size,
+        grace: (f.protectUntil || 0) > g.now ? 1 : 0 });
   const ya = act(A.opp, L.obsYou, g.youKeys, R, L.i);
   g.youKeys = ya.keys;
   L.input.keys.clear();
@@ -309,10 +311,12 @@ function oneFrame(L) {
      inherited, because an inherited action is not a decision. */
   const itLine = !blocked(g.room, f.x, f.z, g.you.x, g.you.z);
   f.losT = itLine ? (f.losT || 0) + DT : 0;
+  memTick(f, keysToBits(f.keys), g.now, DT, f.protectUntil, A.noMem);
   see(L.obsIt, g.room, f, g.you, itLine, f.losT,
       (g.now - (f.lastShot || 0)) / 1000, [0, 0, 0], A.noVel,
       { ammo: (f.ammo || 0) / MAG.size, reloading: f.reloadUntil > g.now },
-      { hp: (g.you.hp || 0) / PLAYER.hp, ammo: (g.you.ammo || 0) / MAG.size });
+      { hp: (g.you.hp || 0) / PLAYER.hp, ammo: (g.you.ammo || 0) / MAG.size,
+        grace: g.protectUntil > g.now ? 1 : 0 });
   const ia = act(A, L.obsIt, f.keys, R, L.i);
   f.keys = ia.keys;
   const t = roll.n++;
@@ -476,7 +480,8 @@ export function stepRehearsal(budgetMs) {
             (pg.now - (lf.lastShot || 0)) / 1000, [0, 0, 0], A.noVel,
             { ammo: (lf.ammo || 0) / MAG.size, reloading: lf.reloadUntil > pg.now },
             { hp: (pg.you.hp || 0) / PLAYER.hp,
-              ammo: (pg.you.ammo || 0) / MAG.size });
+              ammo: (pg.you.ammo || 0) / MAG.size,
+              grace: pg.protectUntil > pg.now ? 1 : 0 });
         lastV = act(A, L.obsIt, lf.keys, R, L.i).value;
       }
       L.total = 0;

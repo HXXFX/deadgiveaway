@@ -26,7 +26,7 @@ const HARD_MAX = 2400;   /* what QC replays; the page stops on the clock first *
    arena is assumed to be the problem. Not a round timer — see below. */
 const DEADLOCK_MS = 40000;
 import { makeAgent, see, learn, act, studyOnce, studyBeat, noteSelf, endLife, endYouLife,
-         noteFired, reward, driveTick,
+         noteFired, reward, driveTick, memTick, keysToBits,
          agentScore, aimBinOf, OBS, ACT, NAIM, RELOAD, MAX_TURN } from './agent.js';
 
 /* A SESSION SEED, DRAWN ONCE, FROM OUTSIDE THE SIMULATION.
@@ -75,7 +75,10 @@ export function createGame(seed) {
               PLAYER.hp today and would silently compute YOUR health against
               the Mirror's ceiling the day they differ. Found by AI-10. */
            lastShot: -PLAYER.fireEvery, ammo: MAG.size, reloadUntil: 0,
-           maxHp: PLAYER.hp },
+           maxHp: PLAYER.hp,
+           /* the short memory (see OBS in agent.js) — in the literal, never
+              added at runtime, per the hidden-class lesson */
+           mKeys: 0, mSince: 0, mTurn: 0, mSpd: 0, mHx: 1, mHz: 0, mGrace: 0 },
     foes: [],
     ghost: null,          /* only in watch mode: an agent piloted by the model */
     shots: [],            /* rounds in flight, from either hand */
@@ -208,6 +211,7 @@ function spawnFoes(g) {
          stops blind fire being a wallhack: while the line is broken the Mirror
          may only point at what it last saw, never at where you actually are. */
       seen: null, protectUntil: 0,
+      mKeys: 0, mSince: 0, mTurn: 0, mSpd: 0, mHx: 1, mHz: 0, mGrace: 0,
       ang: (i / nFoes) * Math.PI * 2,
       protectUntil: graceUntil,
     });
@@ -243,7 +247,9 @@ function spawnGhost(g) {
      is not eaten by the cadence check at now = 0. */
   g.ghost = { x: sp[0], z: sp[1], vx: 0, vz: 0, hx: 0, hz: -1,
               hp: PLAYER.hp, maxHp: PLAYER.hp, dead: 0, last: 0, rounds: kept,
-              ammo: MAG.size, reloadUntil: 0, lastShot: -PLAYER.fireEvery };
+              ammo: MAG.size, reloadUntil: 0, lastShot: -PLAYER.fireEvery,
+              protectUntil: 0,
+              mKeys: 0, mSince: 0, mTurn: 0, mSpd: 0, mHx: 1, mHz: 0, mGrace: 0 };
 }
 
 export function setMode(g, mode) {
@@ -412,12 +418,17 @@ export function step(g, input, dtMs) {
         /* AND WHAT THE OTHER BODY HAS LEFT -- the same two facts the header shows the
            player without their having to learn anything. */
         nf0 ? { hp: (nf0.hp || 0) / ((nf0.maxHp) || FOE.hp),
-                ammo: (nf0.ammo || 0) / MAG.size } : null);
+                ammo: (nf0.ammo || 0) / MAG.size,
+                grace: (nf0.protectUntil || 0) > g.now ? 1 : 0 } : null);
   }
 
   /* --- the human (or the ghost standing in) --------------------------- */
   if (g.mode === 'play') movePlayer(g, input, DT);
   else if (g.ghost && !g.ghost.dead) moveGhost(g, DT);
+  /* the player's memory updates AFTER the move, so the observation above only
+     ever saw last frame's state — same rule as "the keys from last frame" */
+  if (g.mode === 'play')
+    memTick(g.you, keysToBits(input.keys), g.now, DT, g.protectUntil, g.A.noMem);
 
   /* --- what it believes about the player ------------------------------ */
   /* ONE MIND, SEVERAL BODIES. There is exactly one model of you, and from round
@@ -525,13 +536,16 @@ export function step(g, input, dtMs) {
        the roles swapped. This is the only reason a policy cloned from you can
        drive it at all: the vector it is handed has the same meaning, position
        for position, as the ones it was taught on. */
+    memTick(f, keysToBits(f.keys), g.now, DT, f.protectUntil, g.A.noMem);
     see(g.obsIt, g.room, f, target, lineNow, f.losT,
         (g.now - (f.lastShot || 0)) / 1000, threatTo(g, f, true), g.A.noVel,
         { ammo: (f.ammo || 0) / MAG.size, reloading: f.reloadUntil > g.now },
         /* AND WHAT THE OTHER BODY HAS LEFT -- the same two facts the header shows the
            player without their having to learn anything. */
         target ? { hp: (target.hp || 0) / PLAYER.hp,
-                   ammo: (target.ammo || 0) / MAG.size } : null);
+                   ammo: (target.ammo || 0) / MAG.size,
+                   grace: (target === g.you ? g.protectUntil
+                                            : (target.protectUntil || 0)) > g.now ? 1 : 0 } : null);
     if (!f.keys) f.keys = new Set();
     /* THE REHEARSAL DRIVES THIS BODY ITSELF. practice.js samples the action,
        records the log-probability it had, and applies it — so step() must not
@@ -932,13 +946,16 @@ function moveGhost(g, DT) {
   if (!foe) return;
   const line = !blocked(g.room, gh.x, gh.z, foe.x, foe.z);
   gh.losT = line ? (gh.losT || 0) + DT : 0;
+  memTick(gh, keysToBits(gh.keys), g.now, DT, gh.protectUntil, g.A.noMem);
   see(g.obsIt, g.room, gh, foe, line, gh.losT,
       (g.now - (gh.lastShot || 0)) / 1000, threatTo(g, gh, false), g.A.noVel,
         { ammo: (gh.ammo || 0) / MAG.size, reloading: gh.reloadUntil > g.now },
         /* AND WHAT THE OTHER BODY HAS LEFT -- the same two facts the header shows the
            player without their having to learn anything. */
         foe ? { hp: (foe.hp || 0) / ((foe.maxHp) || FOE.hp),
-               ammo: (foe.ammo || 0) / MAG.size } : null);
+               ammo: (foe.ammo || 0) / MAG.size,
+               grace: (foe === g.you ? g.protectUntil
+                                     : (foe.protectUntil || 0)) > g.now ? 1 : 0 } : null);
   if (!gh.keys) gh.keys = new Set();
   const a = act(g.A, g.obsIt, gh.keys, g.rnd, g.frameN || 0);
   gh.keys = a.keys;
