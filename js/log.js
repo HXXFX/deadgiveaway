@@ -162,8 +162,16 @@ export function report(L, g) {
      bug lived through every session report this way — LEARNINGS 9p). The
      conditional pair below cannot be fooled like that, and showing both means
      a disagreement between them is itself a visible finding. */
-  line(`             and it is firing on ${(100 * (A.rateItLine || 0)).toFixed(1)}% of the frames it has you`);
-  line(`             in its sights — you fire on ${(100 * (A.rateYouLine || 0)).toFixed(1)}% of yours`);
+  /* g.A, NOT A: `A` here is the score summary from agentScore(), which has no
+     rate fields, so this line shipped printing 0.0% for both sides — undefined
+     dressed as a measurement, found by the owner's first real session (their
+     report showed 0.0/0.0 over 1,078 fired shots). The verification had seen
+     0.0% on a fresh boot and excused it: the exact zero-vs-missing trap this
+     project already wrote a rule about (LEARNINGS 9q). */
+  line(`             and it is firing on ${(100 * (g.A.rateItLine || 0)).toFixed(1)}% of the frames it has you`);
+  line(`             in its sights — you fire on ${(100 * (g.A.rateYouLine || 0)).toFixed(1)}% of yours`);
+  if ((g.A.rateYouLineBest || 0) > (g.A.rateYouLine || 0) * 1.15)
+    line(`             (the best pace you have shown it: ${(100 * g.A.rateYouLineBest).toFixed(1)}% — that is what it now chases)`);
   line('');
   line('  Every one is graded BEFORE it is trained on, so none of this is a');
   line('  memory of the training set.');

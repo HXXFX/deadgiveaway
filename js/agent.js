@@ -498,6 +498,11 @@ export function makeAgent(seed) {
        line, plus sample counts so the first reading seeds the mean instead of
        averaging against a fictitious zero. The trigger solve reads these. */
     logitLine: 0, logitBlind: 0, logitLineN: 0, logitBlindN: 0,
+    /* the best SUSTAINED firing pace the player has demonstrated: measured
+       per life (clear-line fires over clear-line frames, one whole life at a
+       time), and only lives with enough line time count. The trigger chases
+       this, not the current mood. */
+    rateYouLineBest: 0, lifeLineN: 0, lifeFireN: 0,
     bigErr: 0, bigBase: 0, bigN: 0, smErr: 0, smBase: 0, smN: 0,
     mOY: 0, mOO: 0, mYY: 0, mIY: 0, mII: 0,
     augRate: new Float64Array(4), augN: 0,
@@ -881,6 +886,9 @@ export function learn(p, x, y) {
   if (x[21] > 0.5) {
     p.rateYouLine = ema(p.rateYouLine, y[4] > 0.5 ? 1 : 0, E, seed(p.lineN));
     p.lineN = (p.lineN || 0) + 1;
+    /* and the per-life tally the best-pace ratchet reads at endYouLife() */
+    p.lifeLineN = (p.lifeLineN || 0) + 1;
+    if (y[4] > 0.5) p.lifeFireN = (p.lifeFireN || 0) + 1;
   } else {
     p.rateYouBlind = ema(p.rateYouBlind, y[4] > 0.5 ? 1 : 0, E, seed(p.blindN));
     p.blindN = (p.blindN || 0) + 1;
@@ -1184,7 +1192,31 @@ function noteFiredWalk(p, didFire, hadLine) {
   const A = NF.A;   /* see TRIG_K above: this loop is sample-starved, not slow */
   if (hadLine) {
     p.rateItLine = p.rateItLine * (1 - A) + (didFire ? A : 0);
-    p.biasLine = nfStep(p.rateItLine, p.rateYouLine, p.biasLine);
+    /* THE TARGET IS THE BEST OF YOU, HELD — the owner's rule, verbatim: "once
+       it finds the best version of me in term of shooting or anything else it
+       should keep use these things it learn from me to kill until the new
+       best version of me shows up." The old target was the CURRENT measured
+       pace, which sags whenever the player has a quiet spell — so the Mirror
+       eased off exactly when the player did, and the owner felt it "shooting
+       less than it need to be". Now the target only moves up: the highest
+       pace the player has demonstrated. A fixed target also gives this
+       integrator something it can actually settle on — half of the
+       oscillation was the target itself wandering.
+
+       THE BEST IS MEASURED PER LIFE, AT endYouLife() — see the note there
+       for the two cheaper readings of "best" that failed their A/B before
+       this one (the current pace sags; the highest instant overshoots
+       4-40x, because a pace during one point-blank second is not a pace
+       anyone sustains).
+
+       LINE SIDE ONLY, deliberately. The no-line side copies a HABIT (whether
+       you fire at things you cannot see), not a skill — ratcheting it would
+       grow the known wall-spraying regression (HANDOFF 75), so it still
+       tracks your current behaviour. `noRatchet: 1` restores the old target
+       for ablation. */
+    p.biasLine = nfStep(p.rateItLine,
+                        p.noRatchet ? p.rateYouLine : Math.max(p.rateYouLineBest || 0, p.rateYouLine),
+                        p.biasLine);
   } else {
     p.rateItBlind = p.rateItBlind * (1 - A) + (didFire ? A : 0);
     p.biasBlind = nfStep(p.rateItBlind, p.rateYouBlind, p.biasBlind);
@@ -1499,6 +1531,19 @@ export function noteSelf(p, x, y) {
  * moments is still copied, just less than the one you win with.
  */
 export function endYouLife(p) {
+  /* THE BEST OF YOU IS A LIFE, NOT A SECOND. The owner's rule: once it finds
+     the best version of the player it should keep using it until a better one
+     shows up. Two cheaper readings of "best" failed their A/B first: chasing
+     the CURRENT pace sags whenever the player has a quiet spell (the owner
+     felt it "shooting less than it need to be"), and holding the highest
+     INSTANT of the pace estimate locked onto 4-40x the player's real pace,
+     because a pace during one point-blank second is not a pace anyone
+     sustains. So "best" is now the best whole life: clear-line fires over
+     clear-line frames across one life, counted only when the life had at
+     least 150 line frames (~2.5 s of actual fighting) to average over. */
+  if ((p.lifeLineN || 0) >= 150 && !p.noRatchet)
+    p.rateYouLineBest = Math.max(p.rateYouLineBest || 0, p.lifeFireN / p.lifeLineN);
+  p.lifeLineN = 0; p.lifeFireN = 0;
   const n = Math.min(p.youLifeN, p.n);
   p.youLifeN = 0;
   if (n < 30) { p.youPend = 0; return 0; }
