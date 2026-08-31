@@ -54,15 +54,25 @@ if (_q.get('unattended') === '1') _unattended = true;
 
 /* THE MIRROR CAN REMEMBER YOU — locally, and only by your choice (plan D1).
  *
- * The brain (about 40 KB of numbers) saves into THIS browser's storage and
+ * The brain (about 48 KB of numbers) saves into THIS browser's storage and
  * never leaves the machine: the hosting is static files and stays that way.
  * The owner's two conditions are both honoured: nothing is uploaded, and the
  * from-nothing experience is never taken away — when a saved brain exists the
- * game ASKS, and "play a new Mirror" runs a fresh brain without touching the
- * save. START OVER wipes the memory for good, and the Info panel says so.
+ * game ASKS. Three fates, the owner's words: CONTINUE (the rival picks up
+ * where it left off), QUICK PLAY (a blank Mirror, thrown away when you leave,
+ * the save untouched) and NEW STORY (the rival erased for good, behind a
+ * confirm). START OVER in the dock wipes it too, and the Info panel says so.
  * Harnesses never see any of this: headless, watch, unattended and ?fresh=1
  * all skip both the load and the save, so QC and probes stay deterministic. */
 const BRAIN_KEY = 'dg.brain.v1';
+/* SAVING IS OFF UNTIL A FATE IS CHOSEN, and off for good under QUICK PLAY.
+ *
+ * The undecided case was a silent data-loss bug: while the card was on screen
+ * the brain had not been loaded yet, so game.A was EMPTY — and closing or
+ * reloading the tab fired beforeunload -> saveBrain, writing that empty brain
+ * straight over the player's rival. Every lesson gone, with no confirm and no
+ * choice made. So the card raises this flag before it is shown, and only the
+ * two fates that are meant to persist lower it again. */
 let _noSave = false;
 const _persistOK = () => !_unattended && !game.headless && !_q.has('fresh') &&
                          game.mode === 'play' && typeof localStorage !== 'undefined';
@@ -101,18 +111,24 @@ function offerSavedBrain() {
   try { saved = JSON.parse(localStorage.getItem(BRAIN_KEY) || 'null'); } catch (e) {}
   if (!saved || saved.v !== 1 || saved.obs !== OBS) return;   /* other build: start clean */
   togglePause(true);
+  /* undecided from here until a fate is taken — see _noSave above */
+  _noSave = true;
   const lessons = (saved.nums.lessons || 0).toLocaleString();
-  /* THREE FATES, owner's design: face the rival it became, borrow the newborn
-     for a night (memory untouched), or make it forget you ever existed. The
-     forget option confirms first — "forever" must never be one misclick away. */
+  /* THREE FATES, owner's words: CONTINUE the rival it became, QUICK PLAY a
+     blank Mirror that is thrown away when you leave, or NEW STORY and it
+     forgets you ever existed. New story confirms first — "forever" must never
+     be one misclick away, and it is the innocent-sounding button of the three. */
   const confirmWipe = () => hud.showSheet({
     kick: 'no coming back from this',
     said: lessons + ' lessons, gone',
-    note: 'Every habit it stole from you, every fight it survived — erased. '
+    note: 'Every habit it took off you, every fight it survived — erased. '
         + 'The next round it plays, you are a stranger. There is no undo.',
     cta: 'Erase it — no undo',
     onGo: () => {
       try { localStorage.removeItem(BRAIN_KEY); } catch (e) {}
+      /* the story really does start over: this blank brain becomes the new
+         rival and saves from here, so the flag comes back down */
+      _noSave = false;
       hud.banner('It forgot you', 'an empty brain, and no idea who you are', 2600);
       togglePause(false); view.focus();
     },
@@ -123,14 +139,18 @@ function offerSavedBrain() {
   hud.showSheet({
     kick: 'the Mirror remembers you',
     said: lessons + ' lessons kept',
-    note: 'Everything it stole from you is still in here — saved in this '
+    note: 'Everything it took off you is still in here — saved in this '
         + 'browser, never leaving your machine. CONTINUE and your rival picks '
-        + 'up right where it left off. A NEW MIRROR learns you from zero, and '
-        + 'your rival stays saved for next time. A CLEAN MIRROR starts the '
-        + 'whole story over — its memory is erased for good.',
+        + 'up right where it left off. QUICK PLAY is a blank Mirror that '
+        + 'learns you from zero and is thrown away when you leave; your rival '
+        + 'stays saved, untouched. NEW STORY erases your rival for good and '
+        + 'begins again from nothing.',
     cta: 'Continue',
     onGo: () => {
+      /* a load failure leaves the flag UP: the save is a brain this build
+         cannot read, and writing over it would be the same silent loss */
       if (!loadBrainInto(game.A, saved)) return togglePause(false);
+      _noSave = false;
       /* ROUND 1, WITH MEMORY — the owner's ruling. The round count is
          this session's story (reports, streaks and the difficulty curve all
          compare session to session), so a remembered brain does not resume
@@ -141,9 +161,13 @@ function offerSavedBrain() {
                  lessons + ' lessons from your past sessions, all still loaded', 3200);
       togglePause(false); view.focus();
     },
-    cta2: 'Play a new Mirror',
-    onGo2: () => { _noSave = true; togglePause(false); view.focus(); },
-    cta3: 'Play a clean Mirror',
+    cta2: 'Quick play',
+    onGo2: () => {
+      _noSave = true;             /* already up; explicit, because it is the point */
+      hud.banner('Quick play', 'a blank Mirror — nothing from this one is kept', 2600);
+      togglePause(false); view.focus();
+    },
+    cta3: 'New story',
     onGo3: confirmWipe,
     hold: true,
   });

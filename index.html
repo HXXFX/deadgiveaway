@@ -36,7 +36,8 @@
 
     <div class="status">
       <!-- THE ROUND, AS A FIGHT TICKET (chosen off the design sheet, three
-           rounds of options). Drawn in hud.js: a clean slip for a new Mirror,
+           rounds of options). Drawn in hud.js: a clean slip for a Mirror
+           that knows nothing about you,
            the SAME slip torn and taped back together when it walked in
            remembering you — the lesson count handwritten on the tape. -->
       <canvas class="st-round" id="pRound" width="200" height="42" role="img"
@@ -81,8 +82,11 @@
       <h4>Your data</h4>
       <p>Nothing is uploaded, ever. The model of you is saved in <em>your</em>
          browser only, so the Mirror can remember you between sessions &mdash;
-         it never leaves your machine, and <em>Start Over</em> wipes it for
-         good. No account, no tracking,
+         it never leaves your machine. When a saved rival exists the game asks
+         before anything happens: <em>Continue</em> picks the fight back up,
+         <em>Quick play</em> faces a blank Mirror and keeps nothing from that
+         session, and <em>New story</em> erases the rival for good. <em>Start
+         over</em> in the bar below wipes it too. No account, no tracking,
          no analytics, no network requests at all.</p>
       <h4>How it is built</h4>
       <p>Plain ES modules, no framework and no build step. The 3&#8209;D is drawn by

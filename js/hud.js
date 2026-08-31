@@ -885,7 +885,7 @@ function roundTicket(game) {
   /* the same story for a screen reader, set only when it changes */
   const aria = 'Round ' + game.round + (rem
     ? ' — it remembers you: ' + rem.toLocaleString() + ' lessons'
-    : ' — a new Mirror');
+    : ' — it knows nothing about you yet');
   if (c._aria !== aria) { c._aria = aria; c.setAttribute('aria-label', aria); }
 }
 
