@@ -274,8 +274,9 @@ export function setMode(g, mode) {
  * timer on every frame that `g.you.dead` is set -- so neither could ever fire.
  * Measured: killed at round 1 with the Mirror alive, then a hundred seconds of
  * play, and the body never got up. The fight carried on around a corpse and the
- * only way out was Start Over, which throws the session back to round 1 and
- * takes the model's whole history with it.
+ * only way out was the dock's restart button, which throws the session back to
+ * round 1 (it keeps what the Mirror has learned; the round history is what is
+ * lost).
  *
  * The round still does not end by itself, which is the rule: this waits for the
  * player, keeps the round number, and keeps everything the Mirror has learned.
@@ -323,9 +324,11 @@ export function reviveRound(g) {
 }
 
 export function restart(g) {
-  /* START OVER MEANS A NEW WORLD, not the same one again. Keeping the seed made
-     "start over" a retry of a room you had just learned, which is the opposite
-     of what the button says. */
+  /* A NEW FIGHT MEANS A NEW WORLD, not the same one again. Keeping the seed
+     made the button a retry of a room you had just learned, which is the
+     opposite of what it says. Note what is NOT here: g.A. The Mirror keeps
+     everything it has learned across a restart — the dock button is about the
+     world, and only the boot card's NEW STORY touches the memory. */
   g.seed = freshSeed();
   g.look = castFor(g.seed);
   g.round = 1; g.wins = 0; g.deaths = 0; g.over = false;
@@ -334,7 +337,7 @@ export function restart(g) {
   g.roundStartedAt = g.now; g.reroll = 0;
   /* EVERY FIELD, OR THE ONES LEFT OUT ARE SILENTLY DESTROYED. This reset
      omitted foeReloads and foeDry, so the two counters that describe whether
-     the Mirror can use its magazine were wiped on every Start Over and the
+     the Mirror can use its magazine were wiped on every restart and the
      session report could never have shown them even if it had asked. Keep
      this in step with the literal in createGame. */
   g.stats = { shotsFired: 0, hitsTaken: 0, foeShots: 0, foeHits: 0,

@@ -119,6 +119,15 @@ export function report(L, g) {
   line(`it has watched ${A.graded.toLocaleString()} frames of you and taken ` +
        `${A.lessons.toLocaleString()} lessons from them` +
        (L.studyBeats ? `  ·  ${L.studyBeats} study beats between rounds` : ''));
+  /* A CARRIED-OVER BRAIN MUST SAY SO, HERE OF ALL PLACES. This report is what
+     gets pasted into a conversation and reasoned over, and the line above
+     credits every lesson to frames watched in THIS session. On a remembered
+     rival most of them were not: the score starts high because the work was
+     done days ago, and a reader with only these numbers would call that
+     fast learning. */
+  if (g.remembered)
+    line(`it walked in already knowing you — ${g.remembered.toLocaleString()} of ` +
+         `those lessons came from past sessions, before this one began`);
   const afkS = S.filter((s2) => s2.afk).length * EVERY_MS / 1000;
   if (afkS > 5)
     line(`away from keyboard ${afkS.toFixed(0)} s — it does not watch or learn ` +

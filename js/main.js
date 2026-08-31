@@ -437,9 +437,16 @@ $('rptCopy').addEventListener('click', async () => {
 });
 
 $('btnReset').addEventListener('click', () => {
-  /* START OVER MEANS FORGOTTEN, and the Info panel promises exactly that */
-  try { localStorage.removeItem(BRAIN_KEY); } catch (e) {}
-  _noSave = false;
+  /* A NEW FIGHT DOES NOT TOUCH THE MEMORY, and this button used to claim it
+     did. "START OVER MEANS FORGOTTEN" was false twice over. restart() does
+     not reset game.A, so the trained brain stayed in memory and wrote itself
+     straight back at the next save point — the delete never survived one
+     study beat (measured: 12,764 lessons deleted, 12,764 lessons back). And
+     under QUICK PLAY it was actively destructive: it deleted the real rival
+     and then saved the throwaway brain over it, one click, no confirm.
+     The boot card is the only place memory is decided now; NEW STORY erases
+     it, behind a confirm. This restarts the fight: new world, round one,
+     and whatever the Mirror knows it keeps. */
   restart(game);
   bWatch.setAttribute('aria-pressed', 'false');
   bWatch.textContent = 'Watch it fight itself';

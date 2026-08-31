@@ -23,7 +23,7 @@
  *
  * COLOUR CARRIES MEANING AND IS NOT FREE:
  *   --hot = IT   --cool = YOU   --acid = what it knows about you
- *   --warm = neither (pause, start over)
+ *   --warm = neither (pause, new fight)
  * Nothing decorative may use the first three.
  */
 :root{
@@ -210,7 +210,7 @@ button:disabled{opacity:.4;cursor:default;box-shadow:none}
    cyan --cool  = YOU: your health, your bars, your ground mark, your ghost.
    pink --hot   = THE MIRROR: its health, its shots, its misses, its body count.
    acid --acid  = WHAT IT KNOWS: every learning panel, the guess mark, the meter.
-   orange --warm= the system: pause, start over, things that are neither of you.
+   orange --warm= the system: pause, new fight, things that are neither of you.
    green --good / orange --warm = SIGNED DATA inside charts (+/-), so that plus
    and minus can never be mistaken for you and it. A pressed VIEW toggle goes
    ink-white: a camera is nobody's colour. */
@@ -227,7 +227,7 @@ button.ghosty{background:transparent;box-shadow:none;color:var(--ink-2);
   outline:2px solid var(--line);outline-offset:-2px}
 button.ghosty:hover:not(:disabled){color:var(--hot);outline-color:var(--hot);
   box-shadow:none;transform:skewX(-9deg)}
-/* Pause and Start over are neither IT nor YOU, so they take the one colour that
+/* Pause and New fight are neither IT nor YOU, so they take the one colour that
    means neither — and they sit together, away from the play controls. */
 button.warm{background:var(--warm);color:#1d0d02}
 button.warm:hover:not(:disabled){filter:brightness(1.12)}

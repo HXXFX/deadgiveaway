@@ -504,8 +504,8 @@ export function drawSpark(game) {
    *
    * It keeps the whole HISTORY — which is the thing a pair of towers throws away
    * and the thing this panel is uniquely for, since it is the only readout here
-   * that is about the evening rather than the moment — and it still reads as an
-   * object rather than a chart, so you can see where the evening turned instead
+   * that is about the session rather than the moment — and it still reads as an
+   * object rather than a chart, so you can see where the session turned instead
    * of parsing an axis to find out.
    *
    * Cabinet, not isometric: the run has to be as wide as the card and cabinet is
@@ -516,7 +516,7 @@ export function drawSpark(game) {
 
   const top = Math.max(3, tape.you[n - 1] || 0, tape.it[n - 1] || 0);
   /* the pitch is chosen so the run fills the card however many rounds there are:
-     a short evening gets fat treads, a long one gets thin ones, and neither
+     a short session gets fat treads, a long one gets thin ones, and neither
      leaves the panel half empty */
   const PITCH = Math.max(0.20, Math.min(0.62, 14 / Math.max(1, n)));
   const F = oblFit(w, h - px(d, 16), n * PITCH, 2.5, 1.5, px(d, 8));
@@ -739,9 +739,17 @@ export function updateRail(game) {
   }
   const cn = $('copyN');
   if (cn) cn.textContent = A.lessons.toLocaleString() + ' lessons';
+  /* THE SAME RULE AS `noticed` ABOVE: this caption said "it started with
+     nothing in it" unconditionally, which put a flat contradiction on screen
+     the moment a remembered rival walked in — the panel above it saying it
+     already knew you, this one saying it began empty. Any sentence about
+     where the brain STARTED has to read game.remembered. */
   const cap = $('cmpCap');
   if (cap) cap.textContent = 'It has the same keyboard, the same mouse and the same '
-    + 'view of the map as you. It started with nothing in it.';
+    + 'view of the map as you. '
+    + (game.remembered
+       ? 'It started this fight already knowing you.'
+       : 'It started with nothing in it.');
 }
 
 /* ---- THE VITALS ----------------------------------------------------------
@@ -975,7 +983,7 @@ export function drawRehearsal(now) {
    *
    * THE CRACK IS WHAT EARNS THE SHARD. The pane at the top is this fight: two
    * reflections of one room, and the seam between them fractures wherever a
-   * hit landed. The row underneath is the evening: one cell per practice
+   * hit landed. The row underneath is the session: one cell per practice
    * fight, filled where the fight had something in it and hollow where it did
    * not. The same event drives both, so the panel answers two questions at
    * once -- is anything happening NOW, and how much of this pause has been
@@ -1060,7 +1068,7 @@ export function drawRehearsal(now) {
         pad, h - 6 * d, hits ? P.acid : P.warm, 9);
 }
 
-/* one practice fight in the evening's mirror: a lit shard if it had something
+/* one practice fight in the session's mirror: a lit shard if it had something
    in it, a hollow cell if it did not. The hollow ones were a dashed outline
    first and vanished at thirteen pixels, which made a row of discards read as
    an empty row -- the exact opposite of the point. */

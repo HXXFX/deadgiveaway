@@ -55,8 +55,13 @@ safe and it will do that instead.
 Nothing leaves the browser. There is no account, no analytics, no server and no
 network request of any kind. The model of you is saved in your own browser's
 storage — so the Mirror can remember you between sessions — and never anywhere
-else. The game asks before using a saved memory, and erasing it (in-game, or
-with Start Over) is permanent.
+else.
+
+When a saved rival exists, the game asks before anything happens. **Continue**
+picks the fight back up. **Quick play** faces a blank Mirror and keeps nothing
+from that session — your saved rival is untouched. **New story** erases the
+rival for good, once you confirm it, and that card is the only thing in the
+game that erases the memory. Erasing is permanent.
 
 ## Licence
 

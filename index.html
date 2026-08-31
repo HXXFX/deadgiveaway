@@ -14,7 +14,7 @@
 <div class="app">
 
   <header class="bar">
-    <a class="mark" href="./" title="Dead Giveaway — start over (unsaved progress is lost)">
+    <a class="mark" href="./" title="Dead Giveaway — reload (the round starts again; your saved rival is untouched)">
       <svg viewBox="0 0 100 100" width="44" height="44" aria-hidden="true">
       <!-- the mark, at a size that holds its own beside the wordmark: the 30px
            cut read as a pin next to 28px capitals -->
@@ -67,13 +67,15 @@
       <p>A top-down shooter whose enemy builds a model of how <em>you</em> move and
          aims where you are about to be. Every panel around the arena is reading
          that model live while you play.</p>
-      <h4>Why it flails at first</h4>
+      <h4>Why a new Mirror flails at first</h4>
       <p>It really does start empty &mdash; every weight in the layer that decides
          what it does is zero. With nothing learned, each decision is an even coin
          flip, so round one opens with it firing, reloading and turning at random.
          It has your keys and no idea when to press them. It is shaped within
          seconds: over one minute, with nothing differing but whether the player
-         pulled a trigger, it went from <em>6</em> shots to <em>56</em>.</p>
+         pulled a trigger, it went from <em>6</em> shots to <em>56</em>.
+         A rival you <em>Continue</em> is the exception &mdash; it walks in with
+         everything it learned about you last time, and never flails at all.</p>
       <h4>Study pause</h4>
       <p>Between rounds it studies you and practises against a copy of itself.
          A longer pause means more practice per round.
@@ -85,8 +87,10 @@
          it never leaves your machine. When a saved rival exists the game asks
          before anything happens: <em>Continue</em> picks the fight back up,
          <em>Quick play</em> faces a blank Mirror and keeps nothing from that
-         session, and <em>New story</em> erases the rival for good. <em>Start
-         over</em> in the bar below wipes it too. No account, no tracking,
+         session, and <em>New story</em> erases the rival for good, once you
+         confirm it. That card is the only thing that ever erases the memory
+         &mdash; <em>New fight</em> in the bar below just starts a new world
+         and leaves it alone. No account, no tracking,
          no analytics, no network requests at all.</p>
       <h4>How it is built</h4>
       <p>Plain ES modules, no framework and no build step. The 3&#8209;D is drawn by
@@ -351,7 +355,7 @@
       <div class="pop pop-card" id="helpSpark" hidden role="dialog"
            aria-label="How to read: the ledger">
         <h4>How to read it</h4>
-        <p>A staircase of the whole evening, one tread a round: the wide blue
+        <p>A staircase of the whole session, one tread a round: the wide blue
            treads are your kills, the narrow red steps behind them are its. It
            is kept as it happens, never rebuilt from a summary afterwards.</p>
         <h4>Why the kills matter</h4>
@@ -377,7 +381,12 @@
             title="Everything this session measured, in text you can read and paste.">Report</button>
     <span class="dock-gap"></span>
     <button id="btnPause" class="warm">Pause</button>
-    <button id="btnReset" class="warm">Start over</button>
+    <!-- RENAMED from "Start over", which collided with the boot card's "New
+         story" — two buttons that sounded like the same act, one of which
+         erased the Mirror's memory. This one never touches memory. The id is
+         unchanged so nothing that switches on it had to move. -->
+    <button id="btnReset" class="warm"
+            title="New world, round one. The Mirror keeps everything it has learned.">New fight</button>
   </div>
 
 <!-- THE REPORT. Plain text on purpose: it can be read here, selected, and pasted
