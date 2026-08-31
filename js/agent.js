@@ -474,6 +474,10 @@ export function makeAgent(seed) {
        re-weights YOUR frames only. No new source, just a better question asked
        of the same data. */
     brew: new Float32Array(NET.BUF), bq: new Float32Array(NET.BUF),
+    /* each frame stamped with the QUALITY OF THE WHOLE LIFE it belonged to,
+       so study can prefer frames from the player's best lives — the owner's
+       rule, extended from the trigger to everything: learn the best of me */
+    lq: new Float32Array(NET.BUF),
     youPend: 0, youLifeN: 0, qMean: 0, qN: 0, goodFrames: 0,
     /* how many extra candidates each draw competes against. 0 reproduces the
        old uniform behaviour exactly, which is the control this must be measured
@@ -571,6 +575,10 @@ export function makeAgent(seed) {
        time), and only lives with enough line time count. The trigger chases
        this, not the current mood. */
     rateYouLineBest: 0, lifeLineN: 0, lifeFireN: 0,
+    /* fast twins of the two measured rates: the CONTROLLER steers on these
+       (4x shorter horizon) while the display keeps the smooth originals —
+       the deadband null established that the wobble is measurement LAG */
+    rateItLineF: 0, rateItBlindF: 0,
     bigErr: 0, bigBase: 0, bigN: 0, smErr: 0, smBase: 0, smN: 0,
     mOY: 0, mOO: 0, mYY: 0, mIY: 0, mII: 0,
     augRate: new Float64Array(4), augN: 0,
@@ -1265,8 +1273,15 @@ function noteFiredWalk(p, didFire, hadLine) {
    * of 1/A, about eleven seconds, and a controller that moved much faster than
    * its own measurement updates would oscillate rather than settle. */
   const A = NF.A;   /* see TRIG_K above: this loop is sample-starved, not slow */
+  /* THE LAG ATTEMPT (plan B4): the deadband A/B proved the residual wobble is
+     the controller reacting to its own seconds-old measurement, so the error
+     term now reads a 4x-faster EMA of the same events. The smooth rate stays
+     for every display and report. `slowCtl: 1` restores steering on the slow
+     one for the paired A/B — reverted like the deadband if it loses. */
+  const AF = A * 4;
   if (hadLine) {
     p.rateItLine = p.rateItLine * (1 - A) + (didFire ? A : 0);
+    p.rateItLineF = p.rateItLineF * (1 - AF) + (didFire ? AF : 0);
     /* THE TARGET IS THE BEST OF YOU, HELD — the owner's rule, verbatim: "once
        it finds the best version of me in term of shooting or anything else it
        should keep use these things it learn from me to kill until the new
@@ -1289,12 +1304,14 @@ function noteFiredWalk(p, didFire, hadLine) {
        grow the known wall-spraying regression (HANDOFF 75), so it still
        tracks your current behaviour. `noRatchet: 1` restores the old target
        for ablation. */
-    p.biasLine = nfStep(p, p.rateItLine,
+    p.biasLine = nfStep(p, p.slowCtl ? p.rateItLine : p.rateItLineF,
                         p.noRatchet ? p.rateYouLine : Math.max(p.rateYouLineBest || 0, p.rateYouLine),
                         p.biasLine);
   } else {
     p.rateItBlind = p.rateItBlind * (1 - A) + (didFire ? A : 0);
-    p.biasBlind = nfStep(p, p.rateItBlind, p.rateYouBlind, p.biasBlind);
+    p.rateItBlindF = p.rateItBlindF * (1 - AF) + (didFire ? AF : 0);
+    p.biasBlind = nfStep(p, p.slowCtl ? p.rateItBlind : p.rateItBlindF,
+                         p.rateYouBlind, p.biasBlind);
   }
   p.rateIt = p.rateIt * (1 - A) + (didFire ? A : 0);
 }
@@ -1579,6 +1596,32 @@ export function ppoBatch(p, b, idx, from, to) {
 /* ONE FRAME OF ITS OWN PLAY, held pending. Not learned from yet: a frame is
    only worth copying if the life it belonged to turned out well, and that is
    not known until the life ends. */
+/* HOW WELL DOES THE POLICY IMITATE ITS TEACHER RIGHT NOW, as one number.
+ * Cross-entropy of keys, trigger and aim against the player's stored frames,
+ * on a deterministic stride so two calls before and after a change are
+ * comparable. Exists for the practice-fight veto: a rehearsal whose lessons
+ * made this number meaningfully worse gets rolled back whole (see
+ * practice.js), which is the round-23 aim-dip class made impossible. */
+export function imitLoss(p, M) {
+  const n = Math.min(p.n, NET.BUF);
+  if (n < 60) return 0;
+  let loss = 0, m = 0;
+  for (let k = 0; k < M; k++) {
+    const i = ((k * 37) % n);
+    const x = p.bx.subarray(i * OBS, i * OBS + OBS);
+    const y = p.by.subarray(i * ACT, i * ACT + ACT);
+    const o = forwardAgent(p, x);
+    for (let j = 0; j < 4; j++) {
+      const q = sig(o[j]), a = y[j] > 0.5 ? 1 : 0;
+      loss += -(a * Math.log(Math.max(1e-6, q)) + (1 - a) * Math.log(Math.max(1e-6, 1 - q)));
+    }
+    const qf = sig(o[4]), af = y[4] > 0.5 ? 1 : 0;
+    loss += -(af * Math.log(Math.max(1e-6, qf)) + (1 - af) * Math.log(Math.max(1e-6, 1 - qf)));
+    m++;
+  }
+  return m ? loss / m : 0;
+}
+
 export function noteSelf(p, x, y) {
   if (!p.selfW || p.lN >= LIFE_BUF) return;
   /* DAMAGE ARRIVES AFTER THE DECISION THAT CAUSED IT. Rounds are in flight for
@@ -1632,6 +1675,13 @@ export function endYouLife(p) {
     p.qN++; p.qMean += (acc - p.qMean) / p.qN;
     if (acc > p.qMean) kept++;
   }
+  /* SECOND PASS: stamp every frame of this life with the life's own total.
+     `acc` after the walk is the discounted return from the life's first frame
+     -- one number for how the whole life went. studyOnce() holds tournaments
+     on this, so a frame from a great life beats a frame from a sloppy one
+     even when the two moments look alike. The per-frame bq stays as the
+     tie-breaker inside a life. */
+  for (let k = 1; k <= n; k++) p.lq[(p.head - k + NET.BUF * 2) % NET.BUF] = acc;
   p.goodFrames += kept;
   return kept;
 }
@@ -1748,9 +1798,17 @@ export function studyBeat(p, n) {
 export function studyOnce(p) {
   if (p.n < 60) return;
   let r = Math.floor(p.rnd() * p.n);
-  for (let k = 0; k < p.bestW; k++) {
+  /* THE TOURNAMENT PREFERS THE BEST LIFE FIRST, then the best moment within
+     it. Two candidates was the old size and measured a null on per-moment
+     quality alone (+0.50 +/- 1.29 kills); life-level quality is a different
+     lever — the owner's "learn the best version of me" — and gets a
+     three-way draw. `noLifeStudy: 1` restores the per-moment tournament for
+     the paired A/B. */
+  const K = p.noLifeStudy ? p.bestW : p.bestW + 1;
+  for (let k = 0; k < K; k++) {
     const c = Math.floor(p.rnd() * p.n);
-    if (p.bq[c] > p.bq[r]) r = c;
+    if (p.noLifeStudy ? (p.bq[c] > p.bq[r])
+        : (p.lq[c] > p.lq[r] || (p.lq[c] === p.lq[r] && p.bq[c] > p.bq[r]))) r = c;
   }
   const ref = REFL[Math.floor(p.rnd() * 4)];
   reflect(ref, p.bx.subarray(r * OBS, r * OBS + OBS),

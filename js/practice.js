@@ -35,7 +35,7 @@
 import { createGame, step, shoot, applyKeys } from './sim.js';
 import { WORLD, PLAYER, FOE, MAG } from './config.js';
 import { blocked, nearestProp } from './room.js';
-import { see, act, ppoBatch, studyBeat, PPO, OBS, memTick, keysToBits } from './agent.js';
+import { see, act, ppoBatch, studyBeat, PPO, OBS, memTick, keysToBits, imitLoss, forwardAgent, sig } from './agent.js';
 
 const TRAIL_EVERY = 6;          /* frames between trail samples for the card */
 /* imitation steps run against each minibatch of policy gradient. One minibatch
@@ -57,7 +57,12 @@ const ANCHOR_STEPS = 64;
  * the same length on every machine and a faster one simply practises more
  * inside it — and because the fight is now cut off mid-round rather than played
  * to an end, the value bootstrap in gae() below stops being optional. */
-export const PAUSE_MS = 1600;
+/* adjustable since 2026-08-31 (plan D3): the owner chooses how long the
+   between-round study pause runs — longer pause, more practice per round */
+let PAUSE_MS = 1600;
+export function getPauseMs() { return PAUSE_MS; }
+export function setPauseMs(v) { PAUSE_MS = Math.max(400, Math.min(6000, v | 0)); }
+export { PAUSE_MS };
 /* and how much of it goes on FIGHTING rather than on learning from the fight.
    Measured, an unbudgeted gradient pass cost more than the fight that fed it —
    1.6 s against 3.7 s for 2400 frames — and the pause came out at four and a
@@ -203,7 +208,16 @@ let live = null;
  * so the game's RNG stream is untouched and a replayed seed replays exactly.
  * If 200 draws find nothing (a pathological room), the spawn placement
  * stands: the old behaviour is the fallback, not a throw. */
-function placeInContact(g, seed) {
+/* WEAK-SPOT DRILLING (plan D2, owner-approved). Half of practice fights now
+ * open at the candidate start where the Mirror's own trigger is LEAST willing
+ * to fire — its measured weak spot — rather than at any random contact. The
+ * standoff probes proved these blind spots exist (states the teacher's play
+ * never contained get a shrug), and no amount of ordinary practice visits
+ * them, because ordinary practice starts where fights ordinarily start. It is
+ * still only ever imitating the player and still only rewarded for damage:
+ * this changes WHERE it practices, never WHAT it is allowed to learn.
+ * `noWeakStart: 1` restores pure-random contact starts for the A/B. */
+function placeInContact(g, seed, A) {
   const f = g.foes && g.foes[0], you = g.you;
   if (!f || !you) return;
   let s = (seed >>> 0) || 1;
@@ -211,23 +225,56 @@ function placeInContact(g, seed) {
   const CLR = PLAYER.radius + 0.25;
   const ok = (x, z) => Math.abs(x) < WORLD.AX - 1.2 && Math.abs(z) < WORLD.AZ - 1.2 &&
                        nearestProp(g.room, x, z, true) > CLR;
-  for (let t = 0; t < 200; t++) {
+  const cands = [];
+  for (let t = 0; t < 200 && cands.length < 6; t++) {
     const ax = (rnd() * 2 - 1) * (WORLD.AX - 2), az = (rnd() * 2 - 1) * (WORLD.AZ - 2);
     if (!ok(ax, az)) continue;
     const r = 4 + rnd() * 7, ang = rnd() * Math.PI * 2;
     const bx = ax + Math.cos(ang) * r, bz = az + Math.sin(ang) * r;
     if (!ok(bx, bz) || blocked(g.room, ax, az, bx, bz)) continue;
-    const dx = bx - ax, dz = bz - az, L = Math.hypot(dx, dz) || 1;
-    you.x = ax; you.z = az; you.hx = dx / L; you.hz = dz / L;
-    f.x = bx; f.z = bz; f.hx = -dx / L; f.hz = -dz / L;
-    return;
+    cands.push([ax, az, bx, bz]);
   }
+  if (!cands.length) return;
+  let pick = cands[Math.floor(rnd() * cands.length)];
+  /* HALF THE FIGHTS DRILL, decided by a draw taken IDENTICALLY in both A/B
+     arms and only then branched on. Two wrong versions preceded this line and
+     both produced byte-identical A/B arms — the tell that the condition never
+     engaged: a post-pick coin flip left short sessions with no drilled fight
+     by luck, and a seed-parity test aliased with the rehearsal seeds' 7919
+     stride (their low bits cycle, so the drill bit sat at 0 for most rounds).
+     The counter keeps engagement a measured number, never an assumption. */
+  const drillDraw = rnd();
+  const drill = A && !A.noWeakStart && drillDraw < 0.5;
+  if (drill) A.weakStarts = (A.weakStarts || 0) + 1;
+  if (drill && cands.length > 1) {
+    /* score each candidate by the Mirror's willingness to pull the trigger
+       there, through the shipped see() and the live bias — the same number
+       the standoff probe reads. Lowest willingness wins the drill. */
+    let low = 1e9;
+    for (const c of cands) {
+      f.x = c[2]; f.z = c[3];
+      const dx = c[0] - c[2], dz = c[1] - c[3], L2 = Math.hypot(dx, dz) || 1;
+      f.hx = dx / L2; f.hz = dz / L2;
+      see(SCOUT, g.room, f, { x: c[0], z: c[1], vx: 0, vz: 0, hp: PLAYER.hp,
+                              ammo: MAG.size, dead: 0 },
+          true, 0, 1, [0, 0, 0], A.noVel,
+          { ammo: 1, reloading: false }, { hp: 1, ammo: 1, grace: 0 });
+      const o = forwardAgent(A, SCOUT);
+      const fp = sig(o[4] + (A.biasLine || 0));
+      if (fp < low) { low = fp; pick = c; }
+    }
+  }
+  const [ax, az, bx, bz] = pick;
+  const dx = bx - ax, dz = bz - az, L = Math.hypot(dx, dz) || 1;
+  you.x = ax; you.z = az; you.hx = dx / L; you.hz = dz / L;
+  f.x = bx; f.z = bz; f.hx = -dx / L; f.hz = -dz / L;
 }
+const SCOUT = new Float32Array(OBS);
 
 export function beginRehearsal(A, seed, steps, budgetMs) {
   if (!A.opp) A.opp = snapshot(A);
   const g = createGame(seed);
-  placeInContact(g, seed);
+  placeInContact(g, seed, A);
   /* practice.js owns the Mirror's body: step() must not sample a second action
      and overwrite the one whose log-probability was just recorded */
   g.externalFoe = 1;
@@ -243,6 +290,19 @@ export function beginRehearsal(A, seed, steps, budgetMs) {
     budget: budgetMs || 0, spent: 0,
   };
   A.dbgItShots = 0; A.dbgYouShots = 0; A.dbgEnded = 0; A.dbgBestMiss = undefined;
+  /* THE COPY'S VETO, armed here. The owner's round-23 session showed a real
+     aim dip lasting two rounds — almost certainly one practice fight whose
+     lesson briefly beat the imitation. So: remember how well the policy
+     imitates the player BEFORE this fight (and the exact weights), and when
+     the fight's lessons are about to be kept, re-measure — if imitation got
+     meaningfully worse, the whole lesson is discarded and the weights
+     restored. It only ever throws away; it cannot add anything the player
+     did not teach. `noVeto: 1` disables it for the paired A/B. */
+  if (!A.noVeto && A.n >= 600) {
+    live.preLoss = imitLoss(A, 128);
+    live.preW = { w1: A.w1.slice(), b1: A.b1.slice(), w2: A.w2.slice(),
+                  b2: A.b2.slice(), w3: A.w3.slice(), b3: A.b3.slice() };
+  }
   return live;
 }
 
@@ -538,6 +598,21 @@ export function stepRehearsal(budgetMs) {
         A.rewDamage = (A.rewDamage || 0) + (L.rDam || 0);
         A.rewShaping = (A.rewShaping || 0) + (L.rShape || 0);
         A.rewShots = (A.rewShots || 0) + (L.nShots || 0);
+        /* the veto: measured, not argued — a kept fight whose lessons hurt
+           the imitation by more than a tenth is unlearned on the spot */
+        if (L.preW) {
+          const post = imitLoss(A, 128);
+          if (post > L.preLoss * 1.10) {
+            A.w1.set(L.preW.w1); A.b1.set(L.preW.b1);
+            A.w2.set(L.preW.w2); A.b2.set(L.preW.b2);
+            A.w3.set(L.preW.w3); A.b3.set(L.preW.b3);
+            A.rehearsalsVetoed = (A.rehearsalsVetoed || 0) + 1;
+            if (A.rehearsalLog) { A.rehearsalLog.push(0); if (A.rehearsalLog.length > 64) A.rehearsalLog.shift(); }
+            L.result = { frames: roll.n, reward: L.total, epochs: L.epoch, vetoed: 1 };
+            L.phase = 'done';
+            continue;
+          }
+        }
         A.rehearsals = (A.rehearsals || 0) + 1;
         if (A.rehearsalLog) { A.rehearsalLog.push(1); if (A.rehearsalLog.length > 64) A.rehearsalLog.shift(); }
         A.rehearsedFrames = (A.rehearsedFrames || 0) + roll.n;

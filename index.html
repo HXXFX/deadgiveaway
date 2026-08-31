@@ -68,9 +68,16 @@
          It has your keys and no idea when to press them. It is shaped within
          seconds: over one minute, with nothing differing but whether the player
          pulled a trigger, it went from <em>6</em> shots to <em>56</em>.</p>
+      <h4>Study pause</h4>
+      <p>Between rounds it studies you and practises against a copy of itself.
+         A longer pause means more practice per round.
+         <button class="ghosty" id="pauseNorm" aria-pressed="true">normal</button>
+         <button class="ghosty" id="pauseLong" aria-pressed="false">long</button></p>
       <h4>Your data</h4>
-      <p>Nothing is uploaded and nothing is stored. The model of you exists only
-         while this tab is open; closing it destroys it. No account, no tracking,
+      <p>Nothing is uploaded, ever. The model of you is saved in <em>your</em>
+         browser only, so the Mirror can remember you between sessions &mdash;
+         it never leaves your machine, and <em>Start Over</em> wipes it for
+         good. No account, no tracking,
          no analytics, no network requests at all.</p>
       <h4>How it is built</h4>
       <p>Plain ES modules, no framework and no build step. The 3&#8209;D is drawn by
@@ -149,6 +156,8 @@
         <div class="note" id="shNote"></div>
         <div class="stats" id="shStats"></div>
         <button class="go hm" id="shGo">Continue</button>
+        <button class="go hm alt" id="shGo2" hidden>No</button>
+        <button class="go hm alt" id="shGo3" hidden>No</button>
       </div>
     </div>
 
@@ -268,7 +277,7 @@
            Nothing here is something you cannot see on your own screen.</p>
       </div>
       <canvas id="cSense"></canvas>
-      <p class="cap">Its whole world — the 43 numbers it is given, live.</p>
+      <p class="cap">Its whole world, live — 43 numbers, and nothing you don’t get too.</p>
     </section>
   </aside>
 
@@ -298,8 +307,8 @@
            memory of the training set.</p>
       </div>
       <canvas id="cMiss"></canvas>
-      <p class="cap" id="missCap">Hands, aim and trigger, each as an edge past
-        its control.</p>
+      <p class="cap" id="missCap">Hands, aim, trigger — how much of each is
+        yours now, past what plain guessing would get.</p>
     </section>
     <section class="card">
       <h2>The policy <span class="hint-i" id="brainN"></span>
@@ -324,7 +333,7 @@
            by hand.</p>
       </div>
       <canvas id="cBrain"></canvas>
-      <p class="cap">The one policy, thinking — a pulse per decision, live.</p>
+      <p class="cap">Its whole brain, thinking — one pulse per decision, live.</p>
     </section>
     <section class="card">
       <h2>The ledger
@@ -343,7 +352,7 @@
            against a frozen copy of itself and keeps what worked.</p>
       </div>
       <canvas id="cSpark"></canvas>
-      <p class="cap">Frames of you watched, and the kills the whole thing turns on.</p>
+      <p class="cap">Every frame of you it has watched — and the kills the whole game turns on.</p>
     </section>
   </div>
 

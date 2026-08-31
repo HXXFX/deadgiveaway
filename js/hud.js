@@ -379,7 +379,11 @@ export function drawMiss(game) {
     oblBox(g, ox, oy, s, i * PITCH, 0, 0, CW, hgt, 1.0,
            v > 0.02 ? cols[i] : dim(cols[i]), 1.2 * d);
     const t = obl(ox, oy, s, i * PITCH + CW / 2, hgt, 0.5);
-    text(g, d, (v * 100).toFixed(0) + '%', t[0], t[1] - px(d, 5),
+    /* a clipped bar must not read as perfection: past the top of the scale
+       the label switches to the real multiplier (7x), so 100% stops hiding
+       whatever the edge actually is */
+    text(g, d, (i === 2 && vals[i] >= 1) ? A.fire.toFixed(0) + 'x'
+               : (v * 100).toFixed(0) + '%', t[0], t[1] - px(d, 5),
          v > 0.02 ? cols[i] : P.ink3, VAL, 900, 'center');
     const b2 = obl(ox, oy, s, i * PITCH + CW / 2, 0, 0);
     label(g, d, TOOK[i][0], b2[0], b2[1] + px(d, 12), P.ink3, 9, 'center');
@@ -553,7 +557,31 @@ export function becomeYou(A) {
   const hands = clamp(A.keys, 0, 1);
   const aim = clamp(A.aim, 0, 1);
   const trig = clamp(Math.log(Math.max(1, A.fire)) / Math.log(40), 0, 1);
-  return { hands, aim, trig, become: clamp(0.45 * hands + 0.30 * aim + 0.25 * trig, 0, 1) };
+  /* `raw` is the same blend WITHOUT the floor at zero. The clamp is honest —
+     below the obvious answer IS zero learned — but a player staring at a flat
+     0% for a minute is being told nothing while the truth is climbing, so the
+     badge narrates the climb from `raw` while the number stays clamped. */
+  const trigRaw = clamp(Math.log(Math.max(0.05, A.fire)) / Math.log(40), -1, 1);
+  const raw = 0.45 * clamp(A.keys, -1, 1) + 0.30 * clamp(A.aim, -1, 1) + 0.25 * trigRaw;
+  return { hands, aim, trig, raw,
+           become: clamp(0.45 * hands + 0.30 * aim + 0.25 * trig, 0, 1) };
+}
+
+/* THE NUMBER THE PLAYER READS IS SMOOTHED HERE, AND ONLY HERE — one function,
+ * used by the panel AND by the QC check that judges the panel, so the two can
+ * never drift (a checker must read the readout, and this IS the readout).
+ * ~12 s time constant, and falls are additionally slewed to 3 points a second:
+ * the complaint this answers is the number LOSING 25 points in a breath, which
+ * reads as "it forgot you" when the measurement merely twitched. Rises pass
+ * quickly — a fast climb is the model finally getting it. */
+export function displaySmooth(st, raw, dtSec) {
+  if (!st.init) { st.v = raw; st.init = 1; return st.v; }
+  const a = 1 - Math.exp(-(dtSec || 0.25) / 12);
+  let v = st.v + (raw - st.v) * (raw > st.v ? Math.min(1, a * 4) : a);
+  const maxFall = 0.03 * (dtSec || 0.25);
+  if (st.v - v > maxFall) v = st.v - maxFall;
+  st.v = v;
+  return v;
 }
 
 /* THE BENCH: THE WHOLE PANEL AS ONE SCENE.
@@ -673,18 +701,27 @@ function drawKnow(game, become, parts) {
         w - px(d, 6), px(d, 10), P.ink2, 9, 'right');
 }
 
+const DISP = { v: 0, init: 0, t: 0 };
 export function updateRail(game) {
   const A = agentScore(game.A);
-  const { hands, aim, trig, become } = becomeYou(A);
-  const pct = Math.round(become * 100);
+  const { hands, aim, trig, become, raw } = becomeYou(A);
+  const now = performance.now();
+  const dt = DISP.t ? Math.min(2, (now - DISP.t) / 1000) : 0.25;
+  DISP.t = now;
+  const shown = displaySmooth(DISP, become, dt);
+  const pct = Math.round(shown * 100);
   $('knowNum').textContent = pct + '%';
   $('knowNum').classList.toggle('neg', false);
-  drawKnow(game, become, [hands, aim, trig]);
+  drawKnow(game, shown, [hands, aim, trig]);
   const use = $('knowUse');
   if (use) {
     const watching = A.graded < 600;
+    /* a flat 0% narrates its own climb: the badge counts down the distance to
+       the obvious answer, so a player watching the first minute sees movement */
     use.textContent = watching ? 'still watching'
-                    : become > 0.35 ? 'fighting like you' : 'learning you';
+                    : (pct === 0 && raw < -0.02)
+                      ? 'catching up — ' + Math.round(-raw * 100) + '% behind a lucky guess'
+                    : shown > 0.35 ? 'fighting like you' : 'learning you';
     use.dataset.on = watching ? '0' : '1';
   }
   const n = $('noticed');
@@ -808,8 +845,8 @@ export function showRehearsal(game) {
   const done = v ? v.done : 1;
   $('rhKick').textContent = v && v.phase !== 'fight' ? 'LEARNING FROM IT' : 'REHEARSING';
   $('rhLine').textContent = v && v.phase !== 'fight'
-    ? 'keeping whatever landed a round'
-    : 'it is fighting a copy of you';
+    ? 'keeping only what drew blood'
+    : 'it is fighting a copy of you — for practice';
   $('rhStat').textContent =
     Math.round(done * 100) + '% · ' +
     ((A.rehearsedFrames || 0) + (v ? v.i : 0)).toLocaleString() + ' frames practised · ' +
@@ -997,7 +1034,7 @@ export const pressSheet = () => {
   $('shGo').click();
   return true;
 };
-export function showSheet({ kick, said, note, stats, cta, onGo, hold }) {
+export function showSheet({ kick, said, note, stats, cta, onGo, hold, cta2, onGo2, cta3, onGo3 }) {
   $('shKick').textContent = kick;
   $('shSaid').innerHTML = said;
   $('shNote').innerHTML = note || '';
@@ -1009,6 +1046,20 @@ export function showSheet({ kick, said, note, stats, cta, onGo, hold }) {
   clearTimeout(sheetTimer);
   const close = () => { clearTimeout(sheetTimer); sheetHolds = false; $('sheet').hidden = true; };
   $('shGo').onclick = () => { close(); if (onGo) onGo(); };
+  /* an optional second way out — the Mirror-remembers choice needs a real
+     either/or, and a sheet with one button is a statement, not a question */
+  const g2 = $('shGo2');
+  if (g2) {
+    g2.hidden = !cta2;
+    g2.textContent = cta2 || '';
+    g2.onclick = cta2 ? () => { close(); if (onGo2) onGo2(); } : null;
+  }
+  const g3 = $('shGo3');
+  if (g3) {
+    g3.hidden = !cta3;
+    g3.textContent = cta3 || '';
+    g3.onclick = cta3 ? () => { close(); if (onGo3) onGo3(); } : null;
+  }
   if (!hold) sheetTimer = setTimeout(close, 5200);
   if (hold) $('shGo').focus();
 }

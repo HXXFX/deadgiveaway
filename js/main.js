@@ -6,7 +6,7 @@
 import { WORLD, MODEL, CAM, MAG } from './config.js';
 import { clamp, tok, rgba, fitCanvas } from './util.js';
 import { createGame, step, shoot, reload, restart, reviveRound, setMode } from './sim.js';
-import { rehearsalBusy, stepRehearsal } from './practice.js';
+import { rehearsalBusy, stepRehearsal, setPauseMs } from './practice.js';
 import {
   cam, setCamera, project, screenToGround, drawFloor, pushWallsAndProps,
   pushFigure, pushCorpse, drawFlash, flushFaces, ring, mark, orbit, zoom, resetView,
@@ -14,7 +14,7 @@ import {
   useVenue, setCrt,
 } from './render.js';
 import * as hud from './hud.js';
-import { agentScore } from './agent.js';
+import { agentScore, OBS } from './agent.js';
 import { report } from './log.js';
 
 const $ = (id) => document.getElementById(id);
@@ -51,6 +51,112 @@ if (_q.get('watch') === '1') { _unattended = true; setTimeout(() => setWatch(tru
    It would sit at full health forever, and the frozen game looked like an AI
    that had stopped shooting. Dev-only, changes no rule of play. */
 if (_q.get('unattended') === '1') _unattended = true;
+
+/* THE MIRROR CAN REMEMBER YOU — locally, and only by your choice (plan D1).
+ *
+ * The brain (about 40 KB of numbers) saves into THIS browser's storage and
+ * never leaves the machine: the hosting is static files and stays that way.
+ * The owner's two conditions are both honoured: nothing is uploaded, and the
+ * from-nothing experience is never taken away — when a saved brain exists the
+ * game ASKS, and "start empty this time" plays a newborn without touching the
+ * save. START OVER wipes the memory for good, and the Info panel says so.
+ * Harnesses never see any of this: headless, watch, unattended and ?fresh=1
+ * all skip both the load and the save, so QC and probes stay deterministic. */
+const BRAIN_KEY = 'dg.brain.v1';
+let _noSave = false;
+const _persistOK = () => !_unattended && !game.headless && !_q.has('fresh') &&
+                         game.mode === 'play' && typeof localStorage !== 'undefined';
+const _b64 = (fa) => { let s = ''; const u = new Uint8Array(fa.buffer, fa.byteOffset, fa.byteLength);
+  for (let i = 0; i < u.length; i += 4096) s += String.fromCharCode.apply(null, u.subarray(i, i + 4096));
+  return btoa(s); };
+const _unb64 = (s, n) => { const raw = atob(s); if (raw.length !== n * 4) return null;
+  const u = new Uint8Array(raw.length); for (let i = 0; i < raw.length; i++) u[i] = raw.charCodeAt(i);
+  return new Float32Array(u.buffer); };
+const BRAIN_ARRS = ['w1', 'b1', 'w2', 'b2', 'w3', 'b3', 'rw1', 'rb1', 'rw2'];
+const BRAIN_NUMS = ['rb2', 'biasLine', 'biasBlind', 'rateYouLine', 'rateYouBlind',
+                    'rateYouLineBest', 'logitLine', 'logitBlind', 'logitLineN',
+                    'logitBlindN', 'ppoWarm', 'rehearsals', 'rehearsalsSkipped',
+                    'rehearsalsVetoed', 'lessons'];
+function saveBrain() {
+  if (!_persistOK() || _noSave) return;
+  try {
+    const A = game.A, out = { v: 1, obs: OBS, at: Date.now(), arrs: {}, nums: {} };
+    for (const k of BRAIN_ARRS) out.arrs[k] = _b64(A[k]);
+    for (const k of BRAIN_NUMS) out.nums[k] = A[k] || 0;
+    localStorage.setItem(BRAIN_KEY, JSON.stringify(out));
+  } catch (e) { /* storage full or blocked: the game must never break over a save */ }
+}
+function loadBrainInto(A, saved) {
+  for (const k of BRAIN_ARRS) {
+    const fa = _unb64(saved.arrs[k], A[k].length);
+    if (!fa) return false;              /* a size mismatch is a different brain */
+    A[k].set(fa);
+  }
+  for (const k of BRAIN_NUMS) A[k] = saved.nums[k] || 0;
+  return true;
+}
+function offerSavedBrain() {
+  if (!_persistOK()) return;
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(BRAIN_KEY) || 'null'); } catch (e) {}
+  if (!saved || saved.v !== 1 || saved.obs !== OBS) return;   /* other build: start clean */
+  togglePause(true);
+  const lessons = (saved.nums.lessons || 0).toLocaleString();
+  /* THREE FATES, owner's design: face the rival it became, borrow the newborn
+     for a night (memory untouched), or make it forget you ever existed. The
+     forget option confirms first — "forever" must never be one misclick away. */
+  const confirmWipe = () => hud.showSheet({
+    kick: 'no coming back from this',
+    said: lessons + ' lessons, gone',
+    note: 'Every habit it stole from you, every fight it survived — erased. '
+        + 'The next round it plays, you are a stranger. There is no undo.',
+    cta: 'Do it. Make it forget me',
+    onGo: () => {
+      try { localStorage.removeItem(BRAIN_KEY); } catch (e) {}
+      hud.banner('It forgot you', 'an empty brain, and no idea who you are', 2600);
+      togglePause(false); view.focus();
+    },
+    cta2: 'Wait — keep the memory',
+    onGo2: () => offerSavedBrain(),
+    hold: true,
+  });
+  hud.showSheet({
+    kick: 'the Mirror remembers you',
+    said: lessons + ' lessons kept',
+    note: 'Everything it stole from you is still in here — saved in this '
+        + 'browser, never leaving your machine. Face the rival you trained, '
+        + 'or hand tonight to the newborn and watch it learn you from zero — '
+        + 'your rival sleeps safely either way.',
+    cta: 'Face your rival',
+    onGo: () => {
+      if (!loadBrainInto(game.A, saved)) return togglePause(false);
+      hud.banner('It remembers', 'exactly where you left off — it kept notes', 2600);
+      togglePause(false); view.focus();
+    },
+    cta2: 'Newborn tonight — keep the memory',
+    onGo2: () => { _noSave = true; togglePause(false); view.focus(); },
+    cta3: 'Wipe it. Forget me forever',
+    onGo3: confirmWipe,
+    hold: true,
+  });
+}
+addEventListener('beforeunload', saveBrain);
+/* test hook, same precedent as __game: the harness drives the real functions */
+window.__brain = { save: saveBrain, offer: offerSavedBrain };
+
+/* the study pause, remembered per-browser (plan D3) */
+{
+  const saved = parseInt((typeof localStorage !== 'undefined' && localStorage.getItem('dg.pause')) || '1600', 10);
+  setPauseMs(saved);
+  const wire = (id, ms) => { const b = document.getElementById(id); if (!b) return;
+    b.setAttribute('aria-pressed', String(saved === ms));
+    b.addEventListener('click', () => { setPauseMs(ms);
+      try { localStorage.setItem('dg.pause', String(ms)); } catch (e) {}
+      document.getElementById('pauseNorm').setAttribute('aria-pressed', String(ms === 1600));
+      document.getElementById('pauseLong').setAttribute('aria-pressed', String(ms === 3200));
+    }); };
+  wire('pauseNorm', 1600); wire('pauseLong', 3200);
+}
 /* ?nocrt=1 TAKES THE WHOLE TUBE OFF: the bend filter, the scanlines and the
    glass. It exists to split a bug report in half. A band of shifted pixels at
    the canvas edge can come from the game's drawing or from everything layered
@@ -299,6 +405,9 @@ $('rptCopy').addEventListener('click', async () => {
 });
 
 $('btnReset').addEventListener('click', () => {
+  /* START OVER MEANS FORGOTTEN, and the Info panel promises exactly that */
+  try { localStorage.removeItem(BRAIN_KEY); } catch (e) {}
+  _noSave = false;
   restart(game);
   bWatch.setAttribute('aria-pressed', 'false');
   bWatch.textContent = 'Watch it fight itself';
@@ -457,6 +566,7 @@ function drainEvents() {
             e.studied.passes + ' extra passes)'
           : e.line;
         hud.banner('Round ' + game.round, st2, 3200);
+        saveBrain();          /* a study beat is the natural save point */
       }
     } else if (e.kind === 'death') {
       /* A SHEET, NOT A TOAST. A toast let the round carry on around a body that
@@ -464,9 +574,13 @@ function drainEvents() {
          does not end on its own; it waits here until you say go. */
       hud.showSheet({
         kick: 'the Mirror got you',
-        said: e.leads ? 'it aimed where you were going' : 'it aimed where you were',
-        note: 'Round ' + game.round + ' is still yours to win. Everything it has '
-            + 'learned stays with it — this is a fresh arena, not a fresh start.',
+        said: e.leads ? 'it aimed where you were GOING' : 'it aimed where you stood',
+        note: (e.leads
+            ? 'It read your feet and fired ahead of them — a trick it could only '
+              + 'have stolen from you. '
+            : 'It caught you flat. ')
+            + 'Round ' + game.round + ' is still yours to win: new arena, same '
+            + 'rival, and it keeps every lesson.',
         stats: [
           ['it has become you', Math.round(hud.becomeYou(agentScore(game.A)).become * 100) + '%'],
           ['this round', 'still round ' + game.round],
@@ -506,9 +620,10 @@ function drainEvents() {
       hud.showSheet({
         kick: 'the copy of you is down',
         said: 'it lasted ' + e.rounds + ' round' + (e.rounds === 1 ? '' : 's'),
-        note: 'You lasted ' + game.wins + '. The copy of you is built from ' +
-              agentScore(game.A).graded.toLocaleString() +
-              ' frames of your play, and it had to fight the same thing you did.',
+        note: 'Your stand: ' + game.wins + '. The thing that just lost was built '
+              + 'from ' + agentScore(game.A).graded.toLocaleString()
+              + ' frames of your own play — so somewhere in there, that was you '
+              + 'losing to you.',
         stats: [['your rounds', String(game.wins)], ['its rounds', String(e.rounds)]],
         cta: 'Back to playing', hold: true,
         onGo: () => setWatch(false),
@@ -883,4 +998,5 @@ if (bootEl) bootEl.hidden = true;
 window.__booted = true;
 window.__game = game;          /* test hook: the harness drives the real sim */
 view.focus();
+offerSavedBrain();
 requestAnimationFrame(frame);
