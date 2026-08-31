@@ -130,6 +130,28 @@ export function createGame(seed) {
 }
 
 function newRoom(g, keepModel) {
+  /* A NEW ARENA VOIDS THE OLD ARENA'S COUNTDOWN.
+   *
+   * `pendingAdvance` is the 2.6 s beat between the last foe going down and the
+   * round turning over. It was set in one place and cleared in exactly one
+   * other — the moment it fired — so it outlived the room it belonged to.
+   *
+   * The owner hit it: "at round 2 during the game the round restarted by
+   * itself." A MUTUAL kill sets the timer AND kills the player. The death card
+   * appears, "Get back up" calls reviveRound, and that hands out a fresh arena
+   * in the SAME round with a living Mirror in it. The stale timer then fired
+   * into that new fight: a second new room out of nowhere and a round the
+   * player never won. Their log shows it to the tenth — revive study at 21.8 s,
+   * then a second study AND "round won" together at 24.2 s, 2.6 s after the
+   * kill. restart() leaked it the same way, so New fight also jumped a round.
+   * Measured before and after in dev_log/audit/probe-roundjump.html: 3/3 seeds
+   * jumped on both paths, 0/3 after this line, with the control still firing.
+   *
+   * Clearing it HERE rather than in the two callers is deliberate: every path
+   * that replaces the world goes through newRoom, so a future fifth caller
+   * cannot reintroduce this. The round-advance path zeroes it just above its
+   * own newRoom call, so this is a no-op there. */
+  g.pendingAdvance = 0;
   /* A NEW BODY FOR THE SAME MODEL. See foeFor in chars.js: what persists between
      rounds is everything the enemy knows, and none of that lives in a jacket. */
   if (g.look) g.look.foe = foeFor(g.seed, g.round, g.look.you);
