@@ -110,7 +110,7 @@ function offerSavedBrain() {
     said: lessons + ' lessons, gone',
     note: 'Every habit it stole from you, every fight it survived — erased. '
         + 'The next round it plays, you are a stranger. There is no undo.',
-    cta: 'Delete it all — no undo',
+    cta: 'Erase it — no undo',
     onGo: () => {
       try { localStorage.removeItem(BRAIN_KEY); } catch (e) {}
       hud.banner('It forgot you', 'an empty brain, and no idea who you are', 2600);
@@ -124,9 +124,9 @@ function offerSavedBrain() {
     kick: 'the Mirror remembers you',
     said: lessons + ' lessons kept',
     note: 'Everything it stole from you is still in here — saved in this '
-        + 'browser, never leaving your machine. Face the rival you trained, '
-        + 'or hand tonight to the newborn and watch it learn you from zero — '
-        + 'your rival sleeps safely either way.',
+        + 'browser, never leaving your machine. Keep the rivalry going, play '
+        + 'a brand-new one and watch it learn you from zero (your rival stays '
+        + 'saved), or wipe the slate and start the whole story over.',
     cta: 'Continue — it remembers everything',
     onGo: () => {
       if (!loadBrainInto(game.A, saved)) return togglePause(false);
@@ -140,9 +140,9 @@ function offerSavedBrain() {
                  lessons + ' lessons from your past sessions, all still loaded', 3200);
       togglePause(false); view.focus();
     },
-    cta2: 'Fresh start tonight — memory kept safe',
+    cta2: 'Play a brand-new Mirror — memory kept safe',
     onGo2: () => { _noSave = true; togglePause(false); view.focus(); },
-    cta3: 'Delete its memory forever',
+    cta3: 'Play a clean Mirror forever — its memory erased',
     onGo3: confirmWipe,
     hold: true,
   });
