@@ -110,13 +110,13 @@ function offerSavedBrain() {
     said: lessons + ' lessons, gone',
     note: 'Every habit it stole from you, every fight it survived — erased. '
         + 'The next round it plays, you are a stranger. There is no undo.',
-    cta: 'Do it. Make it forget me',
+    cta: 'Delete it all — no undo',
     onGo: () => {
       try { localStorage.removeItem(BRAIN_KEY); } catch (e) {}
       hud.banner('It forgot you', 'an empty brain, and no idea who you are', 2600);
       togglePause(false); view.focus();
     },
-    cta2: 'Wait — keep the memory',
+    cta2: 'Keep the memory',
     onGo2: () => offerSavedBrain(),
     hold: true,
   });
@@ -127,15 +127,22 @@ function offerSavedBrain() {
         + 'browser, never leaving your machine. Face the rival you trained, '
         + 'or hand tonight to the newborn and watch it learn you from zero — '
         + 'your rival sleeps safely either way.',
-    cta: 'Face your rival',
+    cta: 'Continue — it remembers everything',
     onGo: () => {
       if (!loadBrainInto(game.A, saved)) return togglePause(false);
-      hud.banner('It remembers', 'exactly where you left off — it kept notes', 2600);
+      /* ROUND 1, WITH MEMORY — the owner's ruling. The round count is
+         tonight's story (reports, streaks and the difficulty curve all
+         compare evening to evening), so a remembered brain does not resume
+         at round 31 — it walks into round 1 already knowing you, and every
+         panel that used to say "empty brain" says THAT instead. */
+      game.remembered = (saved.nums.lessons || 0);
+      hud.banner('Round 1 — it walked in knowing you',
+                 lessons + ' lessons from your past sessions, all still loaded', 3200);
       togglePause(false); view.focus();
     },
-    cta2: 'Newborn tonight — keep the memory',
+    cta2: 'Fresh start tonight — memory kept safe',
     onGo2: () => { _noSave = true; togglePause(false); view.focus(); },
-    cta3: 'Wipe it. Forget me forever',
+    cta3: 'Delete its memory forever',
     onGo3: confirmWipe,
     hold: true,
   });

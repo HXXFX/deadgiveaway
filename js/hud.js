@@ -718,7 +718,7 @@ export function updateRail(game) {
     const watching = A.graded < 600;
     /* a flat 0% narrates its own climb: the badge counts down the distance to
        the obvious answer, so a player watching the first minute sees movement */
-    use.textContent = watching ? 'still watching'
+    use.textContent = watching ? (game.remembered ? 'it remembers you' : 'still watching')
                     : (pct === 0 && raw < -0.02)
                       ? 'catching up — ' + Math.round(-raw * 100) + '% behind a lucky guess'
                     : shown > 0.35 ? 'fighting like you' : 'learning you';
@@ -726,7 +726,12 @@ export function updateRail(game) {
   }
   const n = $('noticed');
   if (n) {
-    n.innerHTML = A.graded < 600
+    /* a remembered brain must never be described as empty — the panels tell
+       the truth about what walked in (owner's ruling: round 1, WITH memory) */
+    n.innerHTML = game.remembered
+      ? 'It walked in already knowing you — ' + game.remembered.toLocaleString()
+        + ' lessons from your past sessions. Tonight only adds to them.'
+      : A.graded < 600
       ? 'Nothing yet. It has an empty brain — move, shoot, and it copies what it sees.'
       : (game.wins || 0) === 0
         ? 'It has never been killed, so it has never seen a kill. Round 1 until you win one.'
