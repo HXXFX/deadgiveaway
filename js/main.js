@@ -58,7 +58,7 @@ if (_q.get('unattended') === '1') _unattended = true;
  * never leaves the machine: the hosting is static files and stays that way.
  * The owner's two conditions are both honoured: nothing is uploaded, and the
  * from-nothing experience is never taken away — when a saved brain exists the
- * game ASKS, and "start empty this time" plays a newborn without touching the
+ * game ASKS, and "play a new Mirror" runs a fresh brain without touching the
  * save. START OVER wipes the memory for good, and the Info panel says so.
  * Harnesses never see any of this: headless, watch, unattended and ?fresh=1
  * all skip both the load and the save, so QC and probes stay deterministic. */
@@ -124,10 +124,11 @@ function offerSavedBrain() {
     kick: 'the Mirror remembers you',
     said: lessons + ' lessons kept',
     note: 'Everything it stole from you is still in here — saved in this '
-        + 'browser, never leaving your machine. Keep the rivalry going, play '
-        + 'a brand-new one and watch it learn you from zero (your rival stays '
-        + 'saved), or wipe the slate and start the whole story over.',
-    cta: 'Continue — it remembers everything',
+        + 'browser, never leaving your machine. CONTINUE and your rival picks '
+        + 'up right where it left off. A NEW MIRROR learns you from zero, and '
+        + 'your rival stays saved for next time. A CLEAN MIRROR starts the '
+        + 'whole story over — its memory is erased for good.',
+    cta: 'Continue',
     onGo: () => {
       if (!loadBrainInto(game.A, saved)) return togglePause(false);
       /* ROUND 1, WITH MEMORY — the owner's ruling. The round count is
@@ -140,9 +141,9 @@ function offerSavedBrain() {
                  lessons + ' lessons from your past sessions, all still loaded', 3200);
       togglePause(false); view.focus();
     },
-    cta2: 'Play a brand-new Mirror — memory kept safe',
+    cta2: 'Play a new Mirror',
     onGo2: () => { _noSave = true; togglePause(false); view.focus(); },
-    cta3: 'Play a clean Mirror forever — its memory erased',
+    cta3: 'Play a clean Mirror',
     onGo3: confirmWipe,
     hold: true,
   });

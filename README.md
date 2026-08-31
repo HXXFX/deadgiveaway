@@ -53,8 +53,10 @@ safe and it will do that instead.
 ## Your data
 
 Nothing leaves the browser. There is no account, no analytics, no server and no
-network request of any kind. The model of you is built in memory while the tab is
-open and is destroyed when you close it.
+network request of any kind. The model of you is saved in your own browser's
+storage — so the Mirror can remember you between sessions — and never anywhere
+else. The game asks before using a saved memory, and erasing it (in-game, or
+with Start Over) is permanent.
 
 ## Licence
 
