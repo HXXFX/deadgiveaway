@@ -170,7 +170,9 @@ kbd{background:#3a2b4c;border:1px solid var(--raise);border-bottom-width:2px;
 
 .status{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
         display:flex;align-items:center;gap:14px;white-space:nowrap}
-.st-round{font-size:26px;letter-spacing:.02em;color:var(--ink)}
+/* the round is a drawn ticket now, not type — see roundTicket in hud.js.
+   THE CANVAS MUST HAVE A CSS SIZE — see fitCanvas in util.js. */
+.st-round{display:block;width:200px;height:42px;flex:none}
 /* the two vitals readouts: a label and a small canvas each, and nothing else.
    What is inside them is drawn in hud.js so it can share the arena's language.
    THE CANVAS MUST HAVE A CSS SIZE — see fitCanvas in util.js. */
@@ -686,8 +688,10 @@ button.qm:focus-visible{outline:2px solid var(--acid);outline-offset:1px}
 /* THE HEADER STOPS BEING CENTRED BEFORE IT COLLIDES. `.status` is absolutely
    positioned at the middle of the bar, which is right until the title reaches
    it — at 820px "DEAD GIVEAWAY" and "ROUND 1" were printed on top of each
-   other. Below this width it joins the flex row and takes its turn. */
-@media (max-width:1120px){
+   other. Below this width it joins the flex row and takes its turn. The
+   threshold moved up (1120 -> 1260) when the round became a 200px ticket
+   canvas: the status strip grew ~95px, so the collision point did too. */
+@media (max-width:1260px){
   .status{position:static;transform:none;margin-left:auto;margin-right:12px;
           gap:11px;flex-wrap:wrap;justify-content:flex-end}
   .bar{gap:10px}
@@ -695,6 +699,13 @@ button.qm:focus-visible{outline:2px solid var(--acid);outline-offset:1px}
 @media (max-width:560px){
   .rail{grid-template-columns:minmax(0,1fr)}
   .mark span{font-size:20px}
+  /* THE BAR GROWS INSTEAD OF BLEEDING. Its grid row is a fixed --bar-h, and
+     at phone widths the status wraps to three rows (~130px) that a 56px bar
+     centred both ways — the round indicator was clipped ABOVE the viewport
+     and the Mirror's vitals spilled OVER the arena. The page already scrolls
+     at this width, so let the row size itself and wrap honestly. */
+  .app{grid-template-rows:auto minmax(300px,46vh) auto auto var(--dock-h)}
+  .bar{flex-wrap:wrap;padding:6px 10px;row-gap:4px}
   .status{gap:8px}
-  .st-round{font-size:19px}
+  .st-round{width:150px;height:32px}
 }

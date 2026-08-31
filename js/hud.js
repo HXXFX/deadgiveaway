@@ -730,7 +730,7 @@ export function updateRail(game) {
        the truth about what walked in (owner's ruling: round 1, WITH memory) */
     n.innerHTML = game.remembered
       ? 'It walked in already knowing you — ' + game.remembered.toLocaleString()
-        + ' lessons from your past sessions. Tonight only adds to them.'
+        + ' lessons from your past sessions. This one only adds to them.'
       : A.graded < 600
       ? 'Nothing yet. It has an empty brain — move, shoot, and it copies what it sees.'
       : (game.wins || 0) === 0
@@ -803,8 +803,94 @@ function vitals(id, hp, maxHp, ammo, reloadFrac) {
   }
 }
 
+/* ---- THE ROUND TICKET ----------------------------------------------------
+ *
+ * Chosen off the design sheet (three rounds of round-logo options): the round
+ * is a fight ticket. A new Mirror gets a clean, unbroken slip. A remembered
+ * one gets the SAME slip torn through and taped back together, with the
+ * lesson count handwritten on the tape — the one place a number can live
+ * without becoming a caption. The damage IS the history; there are no words
+ * on the poster that a real ticket would not carry.
+ *
+ * Redrawn every updateBar like the vitals beside it — ~30 canvas ops, cheap —
+ * so a resize or a round change needs no extra wiring.
+ */
+const TKFONT = 'Impact,"Haettenschweiler","Franklin Gothic Heavy","Arial Black",sans-serif';
+function roundTicket(game) {
+  const c = $('pRound'); if (!c) return;
+  const { w, h, d } = fitCanvas(c);
+  const g = c.getContext('2d');
+  g.clearRect(0, 0, w, h);
+  const P = palette();
+  const rem = game.remembered || 0;
+  const col = rem ? P.hot : P.cool;
+
+  /* the slip, with punched half-round notches at both ends. The punch erases
+     the border where it lands (this canvas is its own transparent layer, so
+     destination-out cuts the ticket, not the bar behind it), and the two arc
+     strokes redraw the border AROUND the notch. */
+  const th = h - 8 * d, tw = w - 16 * d;
+  const x = (w - tw) / 2, y = (h - th) / 2, r = th * 0.14;
+  g.fillStyle = rgba(col, 0.16);
+  g.strokeStyle = col; g.lineWidth = 1.6 * d;
+  g.beginPath(); g.roundRect(x, y, tw, th, 5 * d); g.fill(); g.stroke();
+  g.save();
+  g.globalCompositeOperation = 'destination-out';
+  g.beginPath(); g.arc(x, y + th / 2, r, 0, 7); g.fill();
+  g.beginPath(); g.arc(x + tw, y + th / 2, r, 0, 7); g.fill();
+  g.restore();
+  g.beginPath(); g.arc(x, y + th / 2, r, -1.57, 1.57); g.stroke();
+  g.beginPath(); g.arc(x + tw, y + th / 2, r, 1.57, 4.71); g.stroke();
+
+  /* the title, in the app's poster face with the app's slant. A remembered
+     ticket keeps the title left of the tear, so it gets less room; a long
+     round number shrinks to fit rather than escaping the slip. */
+  const say = 'ROUND ' + game.round;
+  let fs = th * 0.62;
+  g.font = '900 ' + fs + 'px ' + TKFONT;
+  const room = rem ? tw * 0.50 : tw * 0.82;
+  const wide = g.measureText(say).width;
+  if (wide > room) { fs *= room / wide; g.font = '900 ' + fs + 'px ' + TKFONT; }
+  const tx = rem ? x + tw * 0.30 : x + tw / 2, ty = y + th * 0.74;
+  g.save();
+  g.textAlign = 'center';
+  g.transform(1, 0, -0.16, 1, 0, 0);
+  g.fillStyle = rgba('#000000', 0.7); g.fillText(say, tx + fs * 0.06, ty + fs * 0.07);
+  g.fillStyle = col; g.fillText(say, tx, ty);
+  g.restore();
+
+  if (rem) {
+    /* the tear, jagged top to bottom */
+    const mid = x + tw * 0.62;
+    g.beginPath(); g.moveTo(mid, y - 1 * d);
+    for (let k = 0; k <= 6; k++)
+      g.lineTo(mid + ((k % 2) ? 4 : -4) * d, y + (k / 6) * th);
+    g.strokeStyle = rgba('#000000', 0.85); g.lineWidth = 2 * d; g.stroke();
+    /* the tape across it, sized to what it has to say */
+    const note = rem.toLocaleString() + ' lessons';
+    g.font = 'italic 700 ' + 8.5 * d + 'px ' + MONO;
+    const tapeW = g.measureText(note).width + 14 * d, tapeH = 13 * d;
+    g.save();
+    g.translate(mid, y + th / 2); g.rotate(-0.26);
+    g.fillStyle = rgba(P.acid, 0.45);
+    g.strokeStyle = rgba(P.acid, 0.7); g.lineWidth = 1 * d;
+    g.fillRect(-tapeW / 2, -tapeH / 2, tapeW, tapeH);
+    g.strokeRect(-tapeW / 2, -tapeH / 2, tapeW, tapeH);
+    g.textAlign = 'center';
+    g.fillStyle = rgba('#0a0410', 0.92);
+    g.fillText(note, 0, 3 * d);
+    g.restore();
+  }
+
+  /* the same story for a screen reader, set only when it changes */
+  const aria = 'Round ' + game.round + (rem
+    ? ' — it remembers you: ' + rem.toLocaleString() + ' lessons'
+    : ' — a new Mirror');
+  if (c._aria !== aria) { c._aria = aria; c.setAttribute('aria-label', aria); }
+}
+
 export function updateBar(game) {
-  $('pRound').textContent = 'Round ' + game.round;
+  roundTicket(game);
   const left = game.protectUntil - game.now;
   const pr = $('pProtect');
   if (pr) {

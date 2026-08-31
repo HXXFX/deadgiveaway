@@ -132,8 +132,8 @@ function offerSavedBrain() {
     onGo: () => {
       if (!loadBrainInto(game.A, saved)) return togglePause(false);
       /* ROUND 1, WITH MEMORY — the owner's ruling. The round count is
-         tonight's story (reports, streaks and the difficulty curve all
-         compare evening to evening), so a remembered brain does not resume
+         this session's story (reports, streaks and the difficulty curve all
+         compare session to session), so a remembered brain does not resume
          at round 31 — it walks into round 1 already knowing you, and every
          panel that used to say "empty brain" says THAT instead. */
       game.remembered = (saved.nums.lessons || 0);
