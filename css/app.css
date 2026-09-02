@@ -694,7 +694,20 @@ button.qm:focus-visible{outline:2px solid var(--acid);outline-offset:1px}
 @media (max-width:1260px){
   .status{position:static;transform:none;margin-left:auto;margin-right:12px;
           gap:11px;flex-wrap:wrap;justify-content:flex-end}
-  .bar{gap:10px}
+  /* THE BAR GROWS WHEREVER THE STATUS WRAPS, not only on phones.
+     `.status` is allowed to wrap from 1260px down, but the bar's grid row was
+     pinned at 56px until 560px — so between those two widths the second row
+     was drawn outside the band: the round ticket clipped off the top of the
+     window and the Mirror's vitals printed over the arena. Measured at 700x380
+     and 800x450. The wrap and the row that has to hold it belong in the same
+     query.
+     Done by retuning --bar-h rather than restating grid-template-rows, because
+     three separate layouts spell that row list out (here, <=980 stacked, and
+     the short-landscape one) and a fourth copy would be one more place to keep
+     in step. `auto` only ever grows: while the status still fits on one line
+     the bar measures the same 56px it always did. */
+  :root{--bar-h:auto}
+  .bar{gap:10px;flex-wrap:wrap;padding:6px 12px;row-gap:4px;min-height:56px}
 }
 @media (max-width:560px){
   .rail{grid-template-columns:minmax(0,1fr)}
@@ -704,8 +717,6 @@ button.qm:focus-visible{outline:2px solid var(--acid);outline-offset:1px}
      centred both ways — the round indicator was clipped ABOVE the viewport
      and the Mirror's vitals spilled OVER the arena. The page already scrolls
      at this width, so let the row size itself and wrap honestly. */
-  .app{grid-template-rows:auto minmax(300px,46vh) auto auto var(--dock-h)}
-  .bar{flex-wrap:wrap;padding:6px 10px;row-gap:4px}
   .status{gap:8px}
   .st-round{width:150px;height:32px}
 }

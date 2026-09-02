@@ -918,6 +918,14 @@ addEventListener('resize', buildCrtMap);
 /* loop                                                                    */
 /* ====================================================================== */
 let last = 0, acc = 0, histT = 0, panelT = 0;
+/* seen panel faults, so a 20 Hz failure reports once rather than every draw */
+const _faults = new Set();
+function panelFault(e) {
+  const k = String(e && e.message || e);
+  if (_faults.has(k)) return;
+  _faults.add(k);
+  console.error('a panel failed to draw; the game keeps running: ' + k, e);
+}
 /* who the death flash belongs to, and the wall-clock time it started */
 let flashFor = null, flashFrom = 0;
 /* when the current rehearsal pause started, so it can be capped */
@@ -1001,17 +1009,33 @@ function frame(now) {
   /* Panels at ~20 Hz, not 60. They are read, not watched, and redrawing six
      canvases every frame is the difference between a smooth fight and a
      stuttering one on a modest machine. */
+  /* A PANEL MUST NEVER BE ABLE TO KILL THE GAME.
+   *
+   * frame() schedules its next rAF on its LAST line, so anything that throws
+   * on the way there ends the loop for good — the arena freezes on whatever
+   * was drawn, the panels stop, and only a reload brings it back. That is a
+   * fatal outcome for a decorative readout, and it happened: drawSense
+   * computed a negative dome radius on a short panel and ellipse() threw
+   * (see the floor in hud.js). The radius is fixed, but the SHAPE of the bug
+   * is what matters — six panels drawing arbitrary geometry from live numbers
+   * upstream of the one line that keeps the game alive.
+   *
+   * So the panels are fenced. One report per distinct message, because a
+   * broken panel at 20 Hz would otherwise bury the console it is trying to
+   * tell you through. */
   if (now - panelT > 50 && !rehearsing) {
     panelT = now;
-    hud.updateRail(game);
-    hud.drawSense(game);
-    hud.drawLoop(game);
-    hud.drawMiss(game);
-    hud.drawBrain(game);
+    try {
+      hud.updateRail(game);
+      hud.drawSense(game);
+      hud.drawLoop(game);
+      hud.drawMiss(game);
+      hud.drawBrain(game);
+    } catch (e) { panelFault(e); }
   }
   if (now - histT > 260) {
     histT = now;
-    hud.drawSpark(game);
+    try { hud.drawSpark(game); } catch (e) { panelFault(e); }
   }
   const hintOver = (hintDone.moved && hintDone.shot) ||
                    (hintDone.moved && now - hintDone.born > HINT_MAX_MS) ||

@@ -70,6 +70,45 @@ function bigNum(g, d, str, x, y, col, size, align) {
 }
 function block(g, x, y, w, h, col) { g.fillStyle = col; g.fillRect(x, y, w, h); }
 
+/* A SMALL LABEL THAT CARRIES ITS OWN GROUND.
+ *
+ * These captions name parts of the 3-D objects, so some of them land on the
+ * PALE top of a bench or slab and some on the dark panel behind it. They were
+ * all drawn in --ink-3, which was measured once against the panel and passes
+ * there at 7.7:1 — and measures 1.93:1 on the bone surfaces, under the 4.5
+ * floor and well under this app's 7. The owner read it exactly right: "the
+ * grey blends in to the graphic." It is LEARNINGS 10 again — a colour checked
+ * against one background and then drawn on another.
+ *
+ * So the label brings the panel colour with it as a plate. On the panel that
+ * plate is invisible (it IS the panel) and nothing changes; on a bench it
+ * becomes a caption chip and the text is back to 7.7:1 either way. The size
+ * goes to the app's own --fs-micro floor of 11px, because 9px uppercase and
+ * tracked is the size the CSS side already rejected once as "a label you
+ * decode rather than read".
+ *
+ * x is clamped so a chip can never hang off the canvas — see the `incoming`
+ * caption, which used to run off the slab and show the owner a stray "COMING".
+ */
+const MICRO = 11;
+function chip(g, d, str, x, y, col, align, w) {
+  const t = String(str).toUpperCase();
+  setFont(g, d, MICRO, 700);
+  const tw = g.measureText(t).width, th = px(d, MICRO);
+  const padX = px(d, 3), padY = px(d, 2);
+  let left = align === 'center' ? x - tw / 2 : align === 'right' ? x - tw : x;
+  if (w) left = Math.max(padX, Math.min(left, w - tw - padX));
+  /* OPAQUE, so the answer does not depend on what is behind it. At 0.92 the
+     8% of bench bleeding through left the text at 6.29:1 on bone against
+     7.71:1 on the panel — over the 4.5 floor but under this app's 7, and two
+     different numbers for the same label. Solid gives 7.71 everywhere. */
+  g.fillStyle = tok('panel-2');
+  g.fillRect(left - padX, y - th + padY, tw + padX * 2, th + padY);
+  g.fillStyle = col; g.textAlign = 'left';
+  g.fillText(t, left, y);
+  return left;
+}
+
 /* the panel palette, read once per draw so a theme change lands everywhere */
 function palette() {
   return {
@@ -144,7 +183,15 @@ export function drawSense(game) {
   const domeH = h - BASE_H;
   const SQ = 0.55;                       /* how far the dome is tipped away */
   const RISE = px(d, 24);                /* the tallest a fin can stand */
-  const R = Math.min(w * 0.40, (domeH - RISE - px(d, 8)) / (SQ * 2));
+  /* FLOORED, BECAUSE A NEGATIVE RADIUS IS AN EXCEPTION, NOT A SMALL CIRCLE.
+     This was Math.min(w*0.40, (domeH - RISE - px(d,8))/(SQ*2)) with nothing
+     under it. Short the panel enough — a short window, a narrow rail, the
+     instant during a resize when the canvas is briefly tiny — and the second
+     term goes negative, ellipse() throws IndexSizeError, and because the frame
+     loop schedules its next rAF on the LAST line of frame(), the throw took
+     the whole game with it: arena frozen mid-picture, panels stale, and no way
+     back but a reload. Caught live at an 800x450 viewport (radius -10.70). */
+  const R = Math.max(px(d, 6), Math.min(w * 0.40, (domeH - RISE - px(d, 8)) / (SQ * 2)));
   const cx = w * 0.5;
   /* centred on what it occupies rather than on its own radius */
   const cy = px(d, 4) + RISE + R * SQ;
@@ -217,8 +264,8 @@ export function drawSense(game) {
   g.fillRect(b0[0], b1[1], (b1[0] - b0[0]) * Math.max(0.02, openFor), b0[1] - b1[1]);
   g.strokeStyle = INK; g.lineWidth = 1 * d;
   g.strokeRect(b0[0], b1[1], b1[0] - b0[0], b0[1] - b1[1]);
-  label(g, d, clear ? 'line open ' + (obs[22] * 2).toFixed(1) + ' s' : 'no line',
-        b0[0] + px(d, 3), b0[1] - px(d, 3), clear ? INK : P.ink2, 9);
+  chip(g, d, clear ? 'line open ' + (obs[22] * 2).toFixed(1) + ' s' : 'no line',
+       b0[0] + px(d, 3), b0[1] - px(d, 3), clear ? CAST.gold : P.ink3, 'left', w);
 
   /* and the lamp: something in the air at it */
   const hot2 = obs[30] > 0.5;
@@ -233,8 +280,13 @@ export function drawSense(game) {
     g.ellipse(lc[0] - px(d, 2), lc[1] - px(d, 2), px(d, 2.4), px(d, 2.4), 0, 0, 7);
     g.fillStyle = rgba('#ffffff', 0.5); g.fill();
   }
-  label(g, d, hot2 ? 'incoming' : 'nothing incoming',
-        lc[0] + px(d, 11), lc[1] + px(d, 3), hot2 ? CAST.red : P.ink3, 9);
+  /* THE CAPTION THAT RAN OFF THE SLAB. This was left-aligned from the lamp
+     with no width limit, so on a narrow rail the tail hung past the picture
+     and the owner saw a stray "COMING" floating outside the graphic. chip()
+     clamps it into the canvas, and the wording is short enough to fit beside
+     the lamp rather than needing the clamp to save it. */
+  chip(g, d, hot2 ? 'incoming' : 'clear',
+       lc[0] + px(d, 11), lc[1] + px(d, 3), hot2 ? CAST.red : P.ink3, 'left', w);
 }
 
 /* ---- 2. ITS HANDS --------------------------------------------------------
@@ -320,10 +372,10 @@ export function drawLoop(game) {
          t[0], t[1] - px(d, 4), col, VAL, 900, 'center');
   }
 
-  label(g, d, 'keys', px(d, 12), px(d, 12), P.ink3, 9);
-  label(g, d, 'mouse', w - px(d, 12), px(d, 12), P.ink3, 9, 'right');
-  label(g, d, 'trigger', px(d, 12), h - px(d, 6), P.ink3, 9);
-  label(g, d, 'reload', w - px(d, 12), h - px(d, 6), P.ink3, 9, 'right');
+  chip(g, d, 'keys', px(d, 12), px(d, 12), P.ink3, 'left', w);
+  chip(g, d, 'mouse', w - px(d, 12), px(d, 12), P.ink3, 'right', w);
+  chip(g, d, 'trigger', px(d, 12), h - px(d, 6), P.ink3, 'left', w);
+  chip(g, d, 'reload', w - px(d, 12), h - px(d, 6), P.ink3, 'right', w);
 }
 
 /* ---- 3. WHAT IT TOOK FROM YOU --------------------------------------------
@@ -386,10 +438,10 @@ export function drawMiss(game) {
                : (v * 100).toFixed(0) + '%', t[0], t[1] - px(d, 5),
          v > 0.02 ? cols[i] : P.ink3, VAL, 900, 'center');
     const b2 = obl(ox, oy, s, i * PITCH + CW / 2, 0, 0);
-    label(g, d, TOOK[i][0], b2[0], b2[1] + px(d, 12), P.ink3, 9, 'center');
+    chip(g, d, TOOK[i][0], b2[0], b2[1] + px(d, 12), P.ink3, 'center', w);
   }
-  label(g, d, A.graded.toLocaleString() + ' frames graded first',
-        px(d, 11), px(d, 11), P.ink3, 9);
+  chip(g, d, A.graded.toLocaleString() + ' frames graded first',
+       px(d, 11), px(d, 11), P.ink3, 'left', w);
 }
 
 /* ---- 4. THE POLICY -------------------------------------------------------
@@ -691,8 +743,8 @@ function drawKnow(game, become, parts) {
   const NMS = ['hands', 'aim', 'trigger'];
   for (let i = 0; i < 3; i++) {
     const b2 = isoPt(ox, oy, s, 0.25 + i * 1.75 + 0.6, 0, 4.5);
-    label(g, d, NMS[i], b2[0], Math.min(h - px(d, 3), b2[1] + px(d, 10)),
-          P.ink3, 9, 'center');
+    chip(g, d, NMS[i], b2[0], Math.min(h - px(d, 3), b2[1] + px(d, 10)),
+         P.ink3, 'center', w);
   }
   /* and the sentence in the empty corner above the bench, where there is
      nothing to collide with in any state */
