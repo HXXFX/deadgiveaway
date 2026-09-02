@@ -91,6 +91,29 @@ function block(g, x, y, w, h, col) { g.fillStyle = col; g.fillRect(x, y, w, h); 
  * caption, which used to run off the slab and show the owner a stray "COMING".
  */
 const MICRO = 11;
+/* TYPE LYING ON AN ISOMETRIC FRONT FACE.
+ *
+ * The design-sheet mock for this was drawn in the CABINET projection, where a
+ * front face is a true rectangle and text can sit on it unchanged. The panels
+ * are ISOMETRIC, where the same face is a parallelogram: +x runs down-right at
+ * 30 degrees and +y is straight up. So a letter has to be sheared into that
+ * plane or it floats above the object exactly the way the old chips did.
+ *
+ * iso() maps (x,y,z) to [ox + (x*0.866 - z*0.866)s, oy + (x*0.5 + z*0.5)s - y*s].
+ * Holding z, a glyph offset (tx, ty) — canvas ty negative is up — lands at
+ * (0.866*tx, 0.5*tx + ty), which is this matrix. The 0.866 is the projection's
+ * own foreshortening, not a style choice. */
+function onIsoFace(g, x, y, str, size, col, align) {
+  g.save();
+  g.translate(x, y);
+  g.transform(0.866, 0.5, 0, 1, 0, 0);
+  g.font = '700 ' + size + 'px ' + MONO;
+  try { g.letterSpacing = '0px'; } catch (e) { /* older engine */ }
+  g.textAlign = align || 'center';
+  g.fillStyle = col;
+  g.fillText(String(str).toUpperCase(), 0, 0);
+  g.restore();
+}
 function chip(g, d, str, x, y, col, align, w) {
   const t = String(str).toUpperCase();
   setFont(g, d, MICRO, 700);
@@ -676,8 +699,12 @@ function drawKnow(game, become, parts) {
      isoFit reserves whatever height it is given — so it solved for a scene half
      again as tall as the one being drawn and shrank everything to suit. The
      numbers below are the real extents of what is on the bench. */
-  const CAP = px(d, 13);
-  const F = isoFit(w, h - CAP, 6.6, 1.9, 4.6, px(d, 6));
+  const CAP = px(d, 4);
+  /* depth 4.6 -> 5.35 and the cap almost gone: the three names used to hang
+     below the scene as floating chips and needed reserved space outside it.
+     They are cast into a plinth now, so they ARE the scene and the fit has to
+     be told about the strip or it draws it off the bottom edge. */
+  const F = isoFit(w, h - CAP, 6.6, 1.9, 5.55, px(d, 5));
   const s = F.s, ox = F.ox, oy = F.oy;
 
   isoPlate(g, ox, oy, s, -0.45, -0.45, 7.5, 5.5, rgba(P.grid, 0.34));
@@ -740,11 +767,33 @@ function drawKnow(game, become, parts) {
   /* EACH NAME UNDER ITS OWN GAUGE, at the gauge's projected position rather
      than at an even third of the canvas — spread evenly they ran into the line
      at the right-hand end, and none of them sat under the thing it named. */
+  /* THE NAMES ARE CAST INTO A PLINTH, NOT STUCK ON THE PANEL.
+   *
+   * Chosen off the design sheet as L7a. They were --ink-3 chips floating below
+   * the bench: readable after the plate was added, but the owner was right
+   * that a plate is a sticker — "they look like label being pasted on".
+   *
+   * So the bench grows a brass strip along its front and the names stand on
+   * its face, sheared into the projection so they belong to the object.
+   * Each name wears its own gauge's colour taken 74% toward ink, and that
+   * number is measured, not chosen: the bar colours placed straight onto
+   * brass measure 2.0-3.3 (a saturated mid-tone and a light brass are the
+   * same VALUE, so hue alone cannot carry a letter), while at 0.74 they read
+   * hands 11.7, aim 8.15, trigger 10.63 against the strip. Aim is the weakest
+   * because gold and brass are the same family — it keeps the least colour of
+   * the three, which is the honest cost of lettering in colour on metal. */
   const NMS = ['hands', 'aim', 'trigger'];
+  const BRASS = mixHex(CAST.bone, CAST.gold, 0.55);
+  /* THE LETTER IS SIZED FROM THE OBJECT, NOT FROM THE DEVICE. A fixed 10*d put
+     12.5 buffer px of type on a strip 11 buffer px tall in the real 196px-wide
+     rail panel — the caption outgrew the thing it was cast into. Tying it to
+     the scene scale keeps the proportion at every panel width, with a floor so
+     it never becomes decoration. */
+  isoBox(g, ox, oy, s, 0.1, 0, 4.45, 5.5, 0.72, 0.34, BRASS, 1.2 * d);
+  const NSZ = Math.max(px(d, 8), s * 0.50);
   for (let i = 0; i < 3; i++) {
-    const b2 = isoPt(ox, oy, s, 0.25 + i * 1.75 + 0.6, 0, 4.5);
-    chip(g, d, NMS[i], b2[0], Math.min(h - px(d, 3), b2[1] + px(d, 10)),
-         P.ink3, 'center', w);
+    const f = isoPt(ox, oy, s, 0.25 + i * 1.75 + 0.6, 0.19, 4.79);
+    onIsoFace(g, f[0], f[1], NMS[i], NSZ, mixHex(cols[i], INK, 0.74));
   }
   /* and the sentence in the empty corner above the bench, where there is
      nothing to collide with in any state */
