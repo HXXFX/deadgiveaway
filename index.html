@@ -78,9 +78,8 @@
          everything it learned about you last time, and never flails at all.</p>
       <h4>Study pause</h4>
       <p>Between rounds it studies you and practises against a copy of itself.
-         A longer pause means more practice per round.
-         <button class="ghosty" id="pauseNorm" aria-pressed="true">normal</button>
-         <button class="ghosty" id="pauseLong" aria-pressed="false">long</button></p>
+         A longer pause means more practice per round &mdash; switch it between
+         <em>normal</em> and <em>long</em> in the bar below.</p>
       <h4>Your data</h4>
       <p>Nothing is uploaded, ever. The model of you is saved in <em>your</em>
          browser only, so the Mirror can remember you between sessions &mdash;
@@ -399,6 +398,17 @@
     <button id="btnWatch" class="you" aria-pressed="false">Watch it fight itself</button>
     <button id="btnReport" class="alt"
             title="Everything this session measured, in text you can read and paste.">Report</button>
+    <!-- STUDY PAUSE, SURFACED. It used to live only in the Info popup, three
+         screens deep; it is a between-rounds setting the player may want mid-run,
+         so it sits on the dock. Same ids as before, so main.js wires it
+         unchanged. -->
+    <span class="dock-seg" role="group" aria-label="Study pause between rounds">
+      <span class="dock-seg-l">study</span>
+      <button class="ghosty seg" id="pauseNorm" aria-pressed="true"
+              title="Normal between-round study pause.">normal</button>
+      <button class="ghosty seg" id="pauseLong" aria-pressed="false"
+              title="Longer pause: more practice per round.">long</button>
+    </span>
     <span class="dock-gap"></span>
     <button id="btnPause" class="warm">Pause</button>
     <!-- RENAMED from "Start over", which collided with the boot card's "New

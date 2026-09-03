@@ -275,8 +275,11 @@ button.alt[aria-pressed="true"]:not(:disabled){background:var(--panel);color:var
 .poplink{color:var(--cool);font-weight:700;text-underline-offset:3px}
 .poplink:hover{color:var(--hot)}
 .pop-plate{margin-top:15px;padding-top:11px;border-top:1px solid var(--line);
-  font-size:var(--fs-micro);letter-spacing:.055em;color:var(--ink-3);
-  text-align:center;line-height:1.9}
+  /* TRACKING TIGHTENED so the provenance line holds on ONE line — measured at
+     310px in a 301px plate at .055em, which wrapped; .028em brings it to ~297px.
+     Per the maker's-mark rule: tighten the plate, do not break the line. */
+  font-size:var(--fs-micro);letter-spacing:.028em;color:var(--ink-3);
+  text-align:center;line-height:1.9;white-space:nowrap}
 /* THE PROVENANCE LINE MUST NOT WRAP. It is the longest string in the panel,
    so the .09em that suits the headings this plate borrows from overflowed it:
    327px needed against 316px available, and the two-line stamp rendered as
@@ -696,8 +699,17 @@ button.qm:focus-visible{outline:2px solid var(--acid);outline-offset:1px}
 
 /* ---- dock ---------------------------------------------------------------- */
 .dock{grid-column:1;grid-row:4;display:flex;align-items:center;justify-content:center;
-  gap:11px;background:var(--panel);border-top:3px solid var(--hot)}
+  /* wrap only when the row does not fit — no effect at full width, but the
+     surfaced study switch can no longer push the dock into overflow on a
+     mid-width window above the 980px stacking breakpoint */
+  gap:11px;flex-wrap:wrap;row-gap:8px;background:var(--panel);border-top:3px solid var(--hot)}
 .dock-gap{width:26px}
+/* the study-pause switch, surfaced onto the dock (see index.html). A small
+   label plus two compact ghost buttons, read as one control. */
+.dock-seg{display:inline-flex;align-items:center;gap:6px}
+.dock-seg-l{font-size:var(--fs-micro);letter-spacing:.14em;text-transform:uppercase;
+  color:var(--ink-3)}
+button.ghosty.seg{padding:5px 9px;font-size:var(--fs-micro)}
 
 /* THE RAIL USED TO BE DELETED UNDER 900px — `display:none`, four live readouts
    gone, on the machines least able to spare them. It moves now; see the layout
