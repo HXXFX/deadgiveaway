@@ -214,28 +214,28 @@ export function drawSense(game) {
    * version faded openness toward the panel's text colour and made the most
    * useful directions the faintest marks on the screen.
    */
-  /* THE DOME IS SIZED FROM WHAT IT ACTUALLY OCCUPIES, which is not a circle.
-     Tipped away by SQ it is only 0.55 as tall as it is wide, and the fins stand
-     UP from it, so its drawn extent is (R x SQ) below the centre and (R x SQ +
-     the tallest fin) above. Sizing it as though it were round left a third of
-     the panel empty over the top of it — measured, the drawn content began 88
-     pixels down a 247-pixel canvas. */
-  const BASE_H = Math.min(px(d, 34), h * 0.24);
-  const domeH = h - BASE_H;
+  /* THE ENGRAVED BEZEL, MADE REAL. (Design sheet: "What it sees · where the
+     text goes", option Engraved bezel; the owner picked it over the five other
+     placements and over the later bezel developments.) The readings are lifted
+     off the moving parts onto a STATIC RING drawn outside the fin sweep — range
+     and unit on the lower arc, line-state on the upper. This is the fix for the
+     fault four text passes kept hitting: the range and "metres" used to sit on
+     the hub, inside the 360-degree sweep, so a fin crossed the label a moment
+     later. No base slab now, so the dome sizes against the whole panel; it is
+     width-limited (w*0.34), which leaves the vertical slack the arc labels need
+     above and below. TOPPAD/BOTPAD reserve that slack so the number can never be
+     pushed off the canvas. */
   const SQ = 0.55;                       /* how far the dome is tipped away */
-  const RISE = px(d, 24);                /* the tallest a fin can stand */
-  /* FLOORED, BECAUSE A NEGATIVE RADIUS IS AN EXCEPTION, NOT A SMALL CIRCLE.
-     This was Math.min(w*0.40, (domeH - RISE - px(d,8))/(SQ*2)) with nothing
-     under it. Short the panel enough — a short window, a narrow rail, the
-     instant during a resize when the canvas is briefly tiny — and the second
-     term goes negative, ellipse() throws IndexSizeError, and because the frame
-     loop schedules its next rAF on the LAST line of frame(), the throw took
-     the whole game with it: arena frozen mid-picture, panels stale, and no way
-     back but a reload. Caught live at an 800x450 viewport (radius -10.70). */
-  const R = Math.max(px(d, 6), Math.min(w * 0.40, (domeH - RISE - px(d, 8)) / (SQ * 2)));
+  const RISE = px(d, 22);                /* the tallest a fin can stand */
+  const TOPPAD = px(d, 15);              /* room over the ring for the line-state */
+  const BOTPAD = px(d, 32);              /* room under it for the range and unit */
+  /* FLOORED: a negative radius throws in ellipse(), and because the frame loop
+     reschedules on its own last line that throw freezes the whole game — caught
+     once at an 800x450 viewport. The floor keeps it a tiny circle instead. */
+  const R = Math.max(px(d, 6),
+                     Math.min(w * 0.34, (h - RISE - TOPPAD - BOTPAD) / (SQ * 2)));
   const cx = w * 0.5;
-  /* centred on what it occupies rather than on its own radius */
-  const cy = px(d, 4) + RISE + R * SQ;
+  const cy = TOPPAD + RISE + R * SQ;
 
   /* ---- the fins: far side first so the near ones overlap them ---- */
   const order = [...Array(RAYS).keys()].sort((i, j) =>
@@ -285,103 +285,61 @@ export function drawSense(game) {
   g.ellipse(px2, pz2, 5 * d, 5 * d * SQ, 0, 0, 7);
   g.fillStyle = CAST.blue; g.fill();
   g.strokeStyle = INK; g.lineWidth = 1.3 * d; g.stroke();
-  /* the distance, ON the line, which is where the eye already is */
-  /* THE DOME IS THE DIAL. C4-b-a, off the design sheet: the range set in the
-   * app's display face, in the middle of the dome, the way every other big
-   * number in this game is set.
-   *
-   * SAID PLAINLY, because it is the one number on the page that does not clear
-   * the bar: bone on the red hub measures 3.49 against a 4.5 floor. The hard
-   * offset shadow this face always carries is what makes it readable anyway —
-   * it puts a near-black edge between the letter and the red — but a shadow is
-   * not contrast and the measurement does not improve. Chosen with that known.
-   * The shadow is therefore drawn heavier here than the CSS uses, since it is
-   * doing more work than usual.
-   *
-   * Blocked, there IS no range, so the dial shows a dash rather than holding a
-   * stale number — the failure this treatment had to answer for. */
+  /* ---- THE ENGRAVED BEZEL: a static ring outside the fins, readings on its
+     arcs. The ring never moves, so the fin sweep never reaches the type. ---- */
+  const rx = R + px(d, 14), ry = R * SQ + px(d, 9);
+  g.strokeStyle = rgba(CAST.bone, 0.5); g.lineWidth = 1.5 * d;
+  g.beginPath(); g.ellipse(cx, cy, rx, ry, 0, 0, 7); g.stroke();
+  g.strokeStyle = rgba(CAST.bone, 0.18); g.lineWidth = 4 * d;
+  g.beginPath(); g.ellipse(cx, cy, rx, ry, 0, 0, 7); g.stroke();
+
+  /* range on the LOWER ARC, in the display face, LIGHT on the dark panel with
+     the hard offset shadow this face always carries; a dash when the line is
+     blocked, because then there is no range to give. It sits below the ring, so
+     it clears the lowest fins as well as the sweep. */
   {
     const txt = clear ? (obs[18] * RAY_MAX).toFixed(1) : '--';
-    /* SIZED SO THE DOME SURVIVES. Tied to R alone this reached 60px in a
-       193px canvas and buried the sixteen fins the panel exists to show — the
-       reading ate its own picture. Capped, it holds the proportion the sheet
-       was picked at. */
-    const fs = Math.max(px(d, 14), Math.min(R * 0.34, px(d, 24)));
+    const fs = Math.max(px(d, 13), Math.min(R * 0.40, px(d, 18)));
     g.save();
     g.font = '900 ' + fs + 'px ' + DISPLAY;
     g.textAlign = 'center';
-    g.transform(1, 0, -0.16, 1, 0, 0);
     g.fillStyle = rgba(INK, 0.85);
-    g.fillText(txt, cx + fs * 0.075, cy + fs * 0.36);
+    g.fillText(txt, cx + fs * 0.06, cy + ry + px(d, 12) + fs * 0.06);
     g.fillStyle = clear ? CAST.bone : P.ink3;
-    g.fillText(txt, cx, cy + fs * 0.29);
+    g.fillText(txt, cx, cy + ry + px(d, 12));
     g.restore();
-    label(g, d, 'metres', cx, cy + fs * 0.62, rgba(CAST.bone, 0.8), 8, 'center');
+    label(g, d, 'metres', cx, cy + ry + px(d, 22), P.ink3, 8, 'center');
   }
 
-  /* ---- the base: a cabinet slab with the two remaining readings on it ---- */
-  const F = oblFit(w, BASE_H, 8.0, 1.0, 0.7, px(d, 3));
-  const bx = F.ox, by = F.oy + domeH;
-  oblBox(g, bx, by, F.s, 0, 0, 0, 8.0, 1.0, 0.7, dim(CAST.bone, 0.88), 1.2 * d);
-
-  /* how long the line has been open, as a bar cut into the face */
-  const openFor = clamp((obs[22] * 2) / 2, 0, 1);
-  /* THE GAUGE STACKS ABOVE THE CAPTION; IT USED TO LIE ACROSS IT. At
-     y 0.24..0.62 this bar covered 6.7 to 17.4px of a ~27px face while the
-     caption below it ran from 3.4px to about 11.4px, so "NO LINE" was drawn
-     straight through the bar. Two faults, not one: the words collided with the
-     graphic, and the bar is rgba(INK,.6) while the caption is INK, so the
-     overlapping half was dark type on a dark ground and lost most of the 6.9:1
-     the bone face was chosen to give it. Raised to 0.52..0.88 the two stack
-     with about 3px of face between them and the caption keeps its own band. */
-  const b0 = obl(bx, by, F.s, 0.35, 0.52, 0);
-  const b1 = obl(bx, by, F.s, 3.4, 0.88, 0);
-  g.fillStyle = rgba(INK, 0.6);
-  g.fillRect(b0[0], b1[1], b1[0] - b0[0], b0[1] - b1[1]);
-  g.fillStyle = clear ? CAST.gold : dim(CAST.gold);
-  g.fillRect(b0[0], b1[1], (b1[0] - b0[0]) * Math.max(0.02, openFor), b0[1] - b1[1]);
-  g.strokeStyle = INK; g.lineWidth = 1 * d;
-  g.strokeRect(b0[0], b1[1], b1[0] - b0[0], b0[1] - b1[1]);
-  /* CUT INTO THE SLAB, NOT LAID OVER IT. This base is the CABINET projection,
-     where the front face is a true rectangle — so the type needs no shear and
-     no plate, it simply sits on the face. The slab is dim(bone) at about
-     rgb(179), and INK on its shaded front measures ~6.9:1. */
-  /* THE TWO READINGS TAKE OPPOSITE ENDS OF THE FACE, like two gauges on the
-     front of a machine. Both were set at 9px and crowded into the left half:
-     the face measures 224 x 28 px in the real rail panel, so the type was
-     under this app's own 11px floor while two thirds of the plate sat empty.
-     At 11px "LINE OPEN 12.3S" needs 127px against the 112px that was there,
-     which is why the second reading moves to the right edge rather than the
-     type staying small. */
-  const cap1 = obl(bx, by, F.s, 0.3, 0.12, 0);
+  /* line-state on the UPPER ARC. ABOVE THE TALLEST FIN, not just above the
+     ring. The fins rise UP by RISE from their tips, so a long ray pointing up
+     the screen peaks at cy - R*SQ - RISE — higher than the ring — and would
+     cross text placed at the ring. The mock hid this because its upward ray was
+     short. Anchored to the fin-peak line, the text is clear whatever the rays
+     do; a very long upward ray may poke through the thin ring below it, which
+     reads as a ray leaving the dial and is fine. */
   text(g, d, (clear ? 'line open ' + (obs[22] * 2).toFixed(1) + 's' : 'no line')
-       .toUpperCase(), cap1[0], cap1[1], INK, 11, 700, 'left');
+       .toUpperCase(), cx, cy - R * SQ - RISE - px(d, 4),
+       clear ? CAST.gold : P.ink3, 9, 700, 'center');
 
-  /* and the lamp: something in the air at it */
+  /* INCOMING FIRE, kept as a small lamp on the ring's upper-right. The engraved
+     bezel on the design sheet dropped this reading; it is genuinely part of what
+     the body senses (obs[30]), so rather than lose it with the base slab it
+     moves onto the bezel. No word unless something is actually in the air. */
   const hot2 = obs[30] > 0.5;
-  const lc = obl(bx, by, F.s, 5.1, 0.43, 0.35);
-  g.beginPath();
-  g.ellipse(lc[0], lc[1], px(d, 7), px(d, 7), 0, 0, 7);
+  /* lower-right of the ring: the fins rise UP and inward, so this arc is the one
+     stretch of the bezel they never reach. */
+  const lx = cx + rx * 0.80, ly = cy + ry * 0.42;
+  g.beginPath(); g.ellipse(lx, ly, px(d, 4.5), px(d, 4.5), 0, 0, 7);
   g.fillStyle = hot2 ? CAST.red : dim(CAST.red, 0.9);
-  g.fill();
-  g.strokeStyle = INK; g.lineWidth = 1.2 * d; g.stroke();
+  g.fill(); g.strokeStyle = INK; g.lineWidth = 1.2 * d; g.stroke();
   if (hot2) {
     g.beginPath();
-    g.ellipse(lc[0] - px(d, 2), lc[1] - px(d, 2), px(d, 2.4), px(d, 2.4), 0, 0, 7);
+    g.ellipse(lx - px(d, 1.4), ly - px(d, 1.4), px(d, 1.6), px(d, 1.6), 0, 0, 7);
     g.fillStyle = rgba('#ffffff', 0.5); g.fill();
+    text(g, d, 'incoming', lx - px(d, 8), ly + px(d, 3),
+         mixHex(CAST.red, INK, 0.35), 8, 700, 'right');
   }
-  /* THE CAPTION THAT RAN OFF THE SLAB. This was left-aligned from the lamp
-     with no width limit, so on a narrow rail the tail hung past the picture
-     and the owner saw a stray "COMING" floating outside the graphic. chip()
-     clamps it into the canvas, and the wording is short enough to fit beside
-     the lamp rather than needing the clamp to save it. */
-  const cap2 = obl(bx, by, F.s, 7.7, 0.12, 0);
-  /* UPPERCASED LIKE ITS OPPOSITE NUMBER. cap1 calls .toUpperCase() and this one
-     did not, so the slab read "NO LINE ... clear" - two readings on one machined
-     face in two different voices, which is most of why the pair looked pasted
-     on rather than engraved. */
-  text(g, d, (hot2 ? 'incoming' : 'clear').toUpperCase(), cap2[0], cap2[1],
-       hot2 ? mixHex(CAST.red, INK, 0.35) : INK, 11, 700, 'right');
 }
 
 /* ---- 2. ITS HANDS --------------------------------------------------------
