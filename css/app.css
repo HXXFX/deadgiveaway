@@ -312,8 +312,33 @@ button.alt[aria-pressed="true"]:not(:disabled){background:var(--panel);color:var
   box-shadow:0 0 0 2px #1b1026, 0 0 0 7px #0b0512,
              0 14px 34px rgba(0,0,0,.75),
              inset 0 0 60px rgba(0,0,0,.55);
+}
+/* THE BEND GOES ON THE PICTURE, NOT ON THE WHOLE TUBE.
+ *
+ * index.html has always said "the bend is an SVG displacement filter over the
+ * arena canvas only" and the filter was on .tube, which also contains .scan and
+ * .glass. The comment was a claim and the claim was false.
+ *
+ * It matters three ways. The scanlines are a 1px line every 3px, and a smoothly
+ * varying displacement of nought to about five pixels applied to a three-pixel
+ * repeat is an aliasing generator — the pattern beats against the pixel grid and
+ * bands appear where the displacement gradient is steepest, which is at the
+ * edges. The glass vignette was being pulled about for no reason. And it made
+ * the filtered layer the whole tube — 1900x650 on a wide window — where a
+ * browser may tile a filtered layer and show seams at tile boundaries.
+ *
+ * The canvas is inset:0 of the tube, so it is the same box at the same size:
+ * the bend itself is unchanged and curvePointer needs no adjustment. What
+ * changes is that the two overlays are no longer bent with it.
+ *
+ * HONESTY NOTE: the owner has reported a shifting band at the bottom of the
+ * viewport three times and it has never reproduced on the development machine.
+ * This is a reasoned fix for a defect that is real in the code, not a verified
+ * fix for the reported symptom. ?nocrt=1 still splits the question in one
+ * reload: band gone with the flag means the filter, band still there means the
+ * game's own drawing. */
+.tube > canvas{position:absolute;inset:0;width:100%;height:100%;display:block;
   filter:url(#crtBend)}
-.tube > canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 
 /* the scan structure. Two layers: fine horizontal lines for the raster, and a
    very slow vertical sweep for the refresh — both are pinned so they cannot be
