@@ -315,28 +315,43 @@ button.alt[aria-pressed="true"]:not(:disabled){background:var(--panel);color:var
 }
 /* THE BEND GOES ON THE PICTURE, NOT ON THE WHOLE TUBE.
  *
- * index.html has always said "the bend is an SVG displacement filter over the
- * arena canvas only" and the filter was on .tube, which also contains .scan and
- * .glass. The comment was a claim and the claim was false.
+ * MEASURED ROOT CAUSE, 2026-09-02, in the owner's Chrome at device pixel ratio
+ * 1.25 with a 1664x674 tube. With the filter on .tube the bottom of the arena
+ * showed a band: the bottom wall row crushed into a doubled strip with a hard
+ * seam across the full width. Moving the filter to the canvas removed it.
  *
- * It matters three ways. The scanlines are a 1px line every 3px, and a smoothly
- * varying displacement of nought to about five pixels applied to a three-pixel
- * repeat is an aliasing generator — the pattern beats against the pixel grid and
- * bands appear where the displacement gradient is steepest, which is at the
- * edges. The glass vignette was being pulled about for no reason. And it made
- * the filtered layer the whole tube — 1900x650 on a wide window — where a
- * browser may tile a filtered layer and show seams at tile boundaries.
+ * The deciding experiment was neither of those. It was setting box-shadow:none
+ * on .tube while LEAVING the filter there — the band vanished. Put the shadow
+ * back and it returned. border-radius and overflow were ruled out the same way,
+ * one at a time, in the same tab and the same frame.
  *
- * The canvas is inset:0 of the tube, so it is the same box at the same size:
- * the bend itself is unchanged and curvePointer needs no adjustment. What
- * changes is that the two overlays are no longer bent with it.
+ * So the mechanism is the SHADOW, not the bend. .tube carries
+ * '0 14px 34px rgba(0,0,0,.75)', which is ink overflow, and ink overflow
+ * enlarges the element's filter region. The displacement map is an feImage at
+ * width="100%" height="100%", so it stretches across that ENLARGED region while
+ * the picture it displaces still occupies only the border box. Map and pixels
+ * are no longer registered, and the error is worst where the map's gradient is
+ * steepest — the edges. Hence a band along the bottom.
  *
- * HONESTY NOTE: the owner has reported a shifting band at the bottom of the
- * viewport three times and it has never reproduced on the development machine.
- * This is a reasoned fix for a defect that is real in the code, not a verified
- * fix for the reported symptom. ?nocrt=1 still splits the question in one
- * reload: band gone with the flag means the filter, band still there means the
- * game's own drawing. */
+ * Measured on the static corner pillar: with the filter on the canvas it moves
+ * 23px left, matching the formula's predicted 23.3px there. With the filter on
+ * .tube it moved about 30px the OTHER way. That is not the curve the game
+ * thinks it is drawing, and curvePointer() reads that same formula — so the aim
+ * was being mapped through a curve the picture did not actually have.
+ *
+ * The canvas is inset:0 of the tube and has NO shadow, so its filter region is
+ * its border box and the map registers exactly.
+ *
+ * DO NOT GIVE THIS CANVAS A BOX-SHADOW, an outline, a drop-shadow or any other
+ * ink overflow. Each of them re-enlarges the filter region and brings the band
+ * straight back, with no error anywhere. Decoration belongs on .tube, which is
+ * no longer filtered.
+ *
+ * TWO EARLIER THEORIES ARE RECORDED BECAUSE BOTH WERE WRONG AND BOTH READ AS
+ * OBVIOUS. That the scanlines were aliasing under displacement: they are not —
+ * hiding .scan and .glass changes nothing, and all four on/off combinations
+ * band identically. That a large filtered layer was seaming at tile
+ * boundaries: the layer is the same size in both placements. */
 .tube > canvas{position:absolute;inset:0;width:100%;height:100%;display:block;
   filter:url(#crtBend)}
 
