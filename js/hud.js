@@ -103,6 +103,24 @@ const MICRO = 11;
  * Holding z, a glyph offset (tx, ty) — canvas ty negative is up — lands at
  * (0.866*tx, 0.5*tx + ty), which is this matrix. The 0.866 is the projection's
  * own foreshortening, not a style choice. */
+/* TYPE LYING FLAT IN THE ISOMETRIC GROUND PLANE — floor markings.
+ *
+ * The face helper below stands a letter UP on a vertical face. This one lays
+ * it DOWN on the deck: reading along +x (down-right) with its letter-height
+ * running along -z (up-right), which is the same parallelogram the plates are
+ * drawn on. iso() gives x -> (0.866, 0.5)s and z -> (-0.866, 0.5)s, so a glyph
+ * offset (tx, ty) lands at (0.866(tx - ty), 0.5(tx + ty)) — this matrix. */
+function onIsoGround(g, x, y, str, size, col, align) {
+  g.save();
+  g.translate(x, y);
+  g.transform(0.866, 0.5, -0.866, 0.5, 0, 0);
+  g.font = '700 ' + size + 'px ' + MONO;
+  try { g.letterSpacing = '0px'; } catch (e) { /* older engine */ }
+  g.textAlign = align || 'left';
+  g.fillStyle = col;
+  g.fillText(String(str).toUpperCase(), 0, 0);
+  g.restore();
+}
 function onIsoFace(g, x, y, str, size, col, align) {
   g.save();
   g.translate(x, y);
@@ -287,8 +305,13 @@ export function drawSense(game) {
   g.fillRect(b0[0], b1[1], (b1[0] - b0[0]) * Math.max(0.02, openFor), b0[1] - b1[1]);
   g.strokeStyle = INK; g.lineWidth = 1 * d;
   g.strokeRect(b0[0], b1[1], b1[0] - b0[0], b0[1] - b1[1]);
-  chip(g, d, clear ? 'line open ' + (obs[22] * 2).toFixed(1) + ' s' : 'no line',
-       b0[0] + px(d, 3), b0[1] - px(d, 3), clear ? CAST.gold : P.ink3, 'left', w);
+  /* CUT INTO THE SLAB, NOT LAID OVER IT. This base is the CABINET projection,
+     where the front face is a true rectangle — so the type needs no shear and
+     no plate, it simply sits on the face. The slab is dim(bone) at about
+     rgb(179), and INK on its shaded front measures ~6.9:1. */
+  const cap1 = obl(bx, by, F.s, 0.35, 0.10, 0);
+  text(g, d, (clear ? 'line open ' + (obs[22] * 2).toFixed(1) + 's' : 'no line')
+       .toUpperCase(), cap1[0], cap1[1], INK, 9, 700, 'left');
 
   /* and the lamp: something in the air at it */
   const hot2 = obs[30] > 0.5;
@@ -308,8 +331,9 @@ export function drawSense(game) {
      and the owner saw a stray "COMING" floating outside the graphic. chip()
      clamps it into the canvas, and the wording is short enough to fit beside
      the lamp rather than needing the clamp to save it. */
-  chip(g, d, hot2 ? 'incoming' : 'clear',
-       lc[0] + px(d, 11), lc[1] + px(d, 3), hot2 ? CAST.red : P.ink3, 'left', w);
+  const cap2 = obl(bx, by, F.s, 4.35, 0.10, 0);
+  text(g, d, hot2 ? 'incoming' : 'clear', cap2[0], cap2[1],
+       hot2 ? mixHex(CAST.red, INK, 0.35) : INK, 9, 700, 'left');
 }
 
 /* ---- 2. ITS HANDS --------------------------------------------------------
@@ -395,10 +419,31 @@ export function drawLoop(game) {
          t[0], t[1] - px(d, 4), col, VAL, 900, 'center');
   }
 
-  chip(g, d, 'keys', px(d, 12), px(d, 12), P.ink3, 'left', w);
-  chip(g, d, 'mouse', w - px(d, 12), px(d, 12), P.ink3, 'right', w);
-  chip(g, d, 'trigger', px(d, 12), h - px(d, 6), P.ink3, 'left', w);
-  chip(g, d, 'reload', w - px(d, 12), h - px(d, 6), P.ink3, 'right', w);
+  /* THE FOUR NAMES LIE ON THE DESK, IN ITS PLANE.
+   *
+   * They were chips at the four CORNERS OF THE CANVAS — as far from the thing
+   * each one names as it is possible to get, and the clearest case of the
+   * owner's "labels pasted on". Each now lies flat on the deck just in front
+   * of its own region, sheared into the ground plane like a marking painted
+   * on a workshop floor, so the name and the object share a surface.
+   *
+   * --ink-3 rather than the objects' colours: the deck is the dark panel, and
+   * measured there the control colours run 3.9-4.0, under the floor, while
+   * --ink-3 is 7.7. Colour is carried by the objects themselves here. */
+  /* ONE CAST STRIP PER REGION, the same language as the bench next door.
+     Laid FLAT on the deck first (proper isometric floor marking) it worked but
+     read faintly: --ink-3 on the dark deck is 7.7:1 against 17:1 for ink on
+     brass, and a letter lying in the ground plane is sheared twice over. A
+     name standing on a strip is sheared once and sits on metal. */
+  const BRASS2 = mixHex(CAST.bone, CAST.gold, 0.55);
+  const NSZ2 = Math.max(px(d, 7.5), s * 0.40);
+  const STRIPS = [['keys', -0.3, 2.35, 3.7], ['mouse', 4.05, 2.30, 1.7],
+                  ['fire', 0.1, 4.62, 1.9], ['reload', 2.5, 4.62, 1.9]];
+  for (const [nm, sx0, sz0, sw] of STRIPS) {
+    isoBox(g, ox, oy, s, sx0, 0, sz0, sw, 0.46, 0.22, BRASS2, 1.05 * d);
+    const q = isoPt(ox, oy, s, sx0 + 0.16, 0.12, sz0 + 0.22);
+    onIsoFace(g, q[0], q[1], nm, NSZ2, rgba(INK, 0.88), 'left');
+  }
 }
 
 /* ---- 3. WHAT IT TOOK FROM YOU --------------------------------------------
@@ -790,10 +835,34 @@ function drawKnow(game, become, parts) {
      the scene scale keeps the proportion at every panel width, with a floor so
      it never becomes decoration. */
   isoBox(g, ox, oy, s, 0.1, 0, 4.45, 5.5, 0.72, 0.34, BRASS, 1.2 * d);
-  const NSZ = Math.max(px(d, 8), s * 0.50);
+  /* PACKED TO THE STRIP, NOT CENTRED UNDER EACH GAUGE.
+   *
+   * Centred, each name got one gauge pitch — 32.4 px in the real rail panel —
+   * and measured HANDS 33.1, AIM 19.9, TRIGGER 46.4: two of the three ran into
+   * their neighbours. Sizing them all down to fit the longest put TRIGGER at
+   * about 6 css px, which is not a caption any more.
+   *
+   * So they are set along the WHOLE strip at even gaps and sized to fill it,
+   * which buys back the space AIM was wasting. Position stops being what ties
+   * a name to its gauge and the COLOUR does it instead — which is the whole
+   * reason this option carries colour at all. */
+  const stripW = 5.3 * 0.866 * s;
+  const GAPS = 2, unit = (n, f) => { setFont(g, d, f, 700); return g.measureText(n).width; };
+  setFont(g, d, 10, 700);
+  const raw = NMS.map((n) => g.measureText(n.toUpperCase()).width);
+  const total = raw[0] + raw[1] + raw[2];
+  const NSZ = Math.max(px(d, 7), Math.min(s * 0.52, 10 * (stripW / (total + GAPS * 6))));
+  setFont(g, d, NSZ / d, 700);
+  const wds = NMS.map((n) => g.measureText(n.toUpperCase()).width);
+  const gap = (stripW - (wds[0] + wds[1] + wds[2])) / GAPS;
+  let run = 0;
+  const p0 = isoPt(ox, oy, s, 0.35, 0.20, 4.79);
   for (let i = 0; i < 3; i++) {
-    const f = isoPt(ox, oy, s, 0.25 + i * 1.75 + 0.6, 0.19, 4.79);
-    onIsoFace(g, f[0], f[1], NMS[i], NSZ, mixHex(cols[i], INK, 0.74));
+    /* walk along the strip in SCREEN x, then step down the face's own slope so
+       the run of names sits in the plane rather than across it */
+    const px0 = p0[0] + run * 0.866, py0 = p0[1] + run * 0.5;
+    onIsoFace(g, px0, py0, NMS[i], NSZ, mixHex(cols[i], INK, 0.74), 'left');
+    run += wds[i] + gap;
   }
   /* and the sentence in the empty corner above the bench, where there is
      nothing to collide with in any state */
