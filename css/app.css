@@ -706,10 +706,25 @@ button.qm:focus-visible{outline:2px solid var(--acid);outline-offset:1px}
 .dock-gap{width:26px}
 /* the study-pause switch, surfaced onto the dock (see index.html). A small
    label plus two compact ghost buttons, read as one control. */
-.dock-seg{display:inline-flex;align-items:center;gap:6px}
-.dock-seg-l{font-size:var(--fs-micro);letter-spacing:.14em;text-transform:uppercase;
-  color:var(--ink-3)}
-button.ghosty.seg{padding:5px 9px;font-size:var(--fs-micro)}
+.dock-seg{display:inline-flex;align-items:center;gap:9px;
+  /* a hairline sets the SETTING apart from the action buttons beside it */
+  padding-left:13px;border-left:1px solid var(--line)}
+.dock-seg-l{font-family:var(--mono);font-weight:700;font-size:var(--fs-micro);
+  letter-spacing:.22em;text-transform:uppercase;color:var(--ink-3)}
+/* THE STUDY SWITCH READS IN THE LEARNING COLOUR. acid is "what it knows" in
+   this app's palette, and study pause is how long the Mirror studies you, so
+   the chosen option glows acid (panel ground, acid text, inset acid ring, the
+   same treatment REPORT uses) rather than the ink-white "camera" pressed state
+   these inherited by default. Idle options stay quiet in ink-3 with a line
+   rule; the cluster is calmer than the warm action buttons, as a setting should
+   be. Class is studybtn, NOT seg: seg is an existing segmented-group class and
+   the two collided. */
+button.ghosty.studybtn{padding:6px 10px;font-size:var(--fs-micro);
+  letter-spacing:.11em;color:var(--ink-3);outline-color:var(--line);box-shadow:none}
+button.ghosty.studybtn:hover:not(:disabled){color:var(--acid);
+  outline-color:var(--acid);transform:skewX(-9deg)}
+button.ghosty.studybtn[aria-pressed="true"]:not(:disabled){background:var(--panel);
+  color:var(--acid);outline-color:var(--acid);box-shadow:inset 0 0 0 2px var(--acid)}
 
 /* THE RAIL USED TO BE DELETED UNDER 900px — `display:none`, four live readouts
    gone, on the machines least able to spare them. It moves now; see the layout
