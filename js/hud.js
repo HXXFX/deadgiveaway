@@ -1013,9 +1013,44 @@ export function updateRail(game) {
     const card = $(sel) && $(sel).closest('.card');
     if (card) card.setAttribute('data-live', on ? '1' : '0');
   };
-  live('cKnow', A.graded >= 600);
-  live('cLoop', !!game.lastAct);
-  live('cSense', !!game.obsIt);
+  /* ALL SIX PANELS, not three. Applied to the rail only, the deck treatment
+     left the bottom row still captioned underneath: two rail panels with no
+     text beside three deck panels with text in the old place, which reads as
+     missing rather than as designed. The owner caught it.
+     Each condition below is the panel's OWN empty-state test, lifted from its
+     draw function rather than invented here, so a deck retires at exactly the
+     moment its picture starts being worth reading:
+       cKnow   the "still watching" bar its own sentence talks about
+       cLoop   drawLoop:  if (!A) ......... A = game.lastAct
+       cSense  drawSense: if (!obs || !f)
+       cMiss   drawMiss:  if (!A.graded)
+       cBrain  same policy pulse cLoop reads
+       cSpark  drawSpark: if (!n) ........ n = rounds on the tape */
+  /* THE BAR IS "WORTH READING", NOT "HAS ONE FRAME".
+     Wired to each panel's raw empty guard, four of the six decks vanished
+     inside the first frame — game.lastAct and a single graded frame both
+     arrive immediately — and a standfirst visible for 16ms is worse than
+     none, which is what "the text is missing" looks like. The honest bar is
+     the one these panels already tell the player about: 600 graded frames,
+     the same "still watching" threshold the become-you badge clears. Until
+     then the pictures genuinely have nothing to say, because the Mirror has
+     not watched enough. The ledger keeps its own test, since a ledger with no
+     rounds on it is empty in a way no amount of watching fixes.
+     A consequence worth having: CONTINUE loads a brain whose graded count is
+     already past the bar, so a returning rival shows no decks at all. The
+     explanation appears for someone meeting a new Mirror and for nobody else. */
+  const watched = A.graded >= 600;
+  const foeAlive = game.foes && game.foes.some((q) => !q.dead);
+  live('cKnow', watched);
+  live('cLoop', watched && !!game.lastAct);
+  live('cSense', watched && !!(game.obsIt && foeAlive));
+  live('cMiss', watched);
+  live('cBrain', watched && !!game.lastAct);
+  /* tape.round is a SAMPLING tape, not a list of finished rounds - it gains an
+     entry within the first second, so testing it alone put the ledger live
+     immediately and its deck never appeared. Same bar as the rest, and its own
+     test kept as well so a deck never sits over an empty canvas. */
+  live('cSpark', watched && tape.round.length > 0);
 
   const cn = $('copyN');
   if (cn) cn.textContent = A.lessons.toLocaleString() + ' lessons';

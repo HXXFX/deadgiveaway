@@ -512,16 +512,22 @@ button.alt[aria-pressed="true"]:not(:disabled){background:var(--panel);color:var
  * Set in the app's label voice rather than as prose, so it sounds like the
  * machine it introduces. --acid on --panel-2 measures 13.2:1.
  *
+ * NAMED .standfirst, NOT .deck. `.deck` was already the bottom panel ROW —
+ * a layout container with its own grid, background and border — and a second
+ * rule of that name later in this file silently overrode its background,
+ * padding, border and font. The newspaper term for the line under a headline
+ * is the standfirst, which is exactly this element and collides with nothing.
+ *
  * It is the EMPTY STATE's explanation (option H6): hud.js drops [data-live] on
  * the card once the instrument has something to show, and the deck goes away
  * to leave the height to the picture. Nothing is lost — every deck's content
  * is also in that card's "?" panel, which is always there. */
-.deck{margin:0 0 6px;font-family:var(--mono);font-size:var(--fs-micro);
+.standfirst{margin:0 0 6px;font-family:var(--mono);font-size:var(--fs-micro);
   font-weight:700;letter-spacing:.09em;text-transform:uppercase;line-height:1.45;
   color:var(--acid);border-left:2px solid var(--acid);padding:3px 0 3px 7px;
   background:linear-gradient(90deg,rgba(245,230,99,.10),rgba(245,230,99,0))}
-.deck b{color:var(--ink)}
-.card[data-live="1"] .deck{display:none}
+.standfirst b{color:var(--ink)}
+.card[data-live="1"] .standfirst{display:none}
 /* ---- per-panel help ------------------------------------------------------ */
 /* THE HELP IS THE BACK OF THE CARD. The explanations used to sit under each
    viz as captions; the player asked for the picture to carry the live info
