@@ -406,6 +406,30 @@ export function drawLoop(game) {
   const F = isoFit(w, h - px(d, 22), 6.4, 2.2, 5.6, px(d, 9));
   const s = F.s, ox = F.ox, oy = F.oy + px(d, 14);
 
+  /* B6-e-b, off the design sheet: THE DESK TAKES THE COLOUR OF THE ROOM.
+   *
+   * The names sit on FIXED dark strips, and that split is the whole point. It
+   * was measured: ink written straight onto a venue-coloured deck runs 4.47 to
+   * 6.13 across the nine rooms and the club fails the 4.5 floor outright.
+   * Because the strip is a constant the room can be as saturated as it likes
+   * and the text never moves — which also frees each name to wear its own
+   * control's colour lifted toward white instead of being flattened to grey:
+   * 6.8 keys, 12.75 mouse, 8.77 reload against that strip.
+   *
+   * DRAWN HERE, FIRST, because it is a ground. Written into the strip section
+   * further down it painted over the keyboard, the mouse and both trigger
+   * bars, and the panel became an empty coloured field with four labels
+   * floating on it — which is exactly what the owner saw.
+   *
+   * getGround() rather than tok(): the arena sets a venue palette while it
+   * draws and never clears it, so tok would answer with room colours by
+   * accident. Asking the ground map directly is the same answer on purpose,
+   * and it returns null on the design sheet, where there is no room. */
+  const room = getGround();
+  const DECK2 = room && room.floor2
+    ? mixHex(room.floor2, CAST.bone, 0.2) : dim(CAST.bone, 0.7);
+  isoPlate(g, ox, oy, s, -0.55, -0.55, 7.5, 6.7, DECK2);
+
 
   /* the keyboard, at the back. A held key is a key that is DOWN. */
   isoPlate(g, ox, oy, s, -0.3, -0.3, 3.7, 2.7, rgba(P.grid, 0.34));
@@ -477,23 +501,6 @@ export function drawLoop(game) {
      the quietest thing on the panel compete with the loudest. A desaturated
      plate reads as chrome, carries ink at about 9:1, and leaves yellow to say
      the one thing it is supposed to say here. */
-  /* B6-e-b, off the design sheet. The desk takes the colour of the room the
-     fight is happening in, and the names sit on FIXED dark strips.
-     That split is the whole point and it was measured: a venue-coloured deck
-     with ink written straight on it runs 4.47 to 6.13 across the nine rooms —
-     the club fails the 4.5 floor outright. Because the strip is a constant,
-     the room can be as saturated as it likes and the text never moves, which
-     also frees each name to wear its own control's colour lifted toward white
-     rather than being flattened to grey: measured 6.8 keys, 12.75 mouse,
-     8.77 reload against this strip.
-     getGround() rather than tok(): the arena sets a venue palette while it
-     draws and does not clear it, so tok would answer with room colours by
-     accident. Asking for the ground map directly is the same answer on
-     purpose, and it returns null on the design sheet, where there is no room. */
-  const room = getGround();
-  const DECK2 = room && room.floor2
-    ? mixHex(room.floor2, CAST.bone, 0.2) : dim(CAST.bone, 0.7);
-  isoPlate(g, ox, oy, s, -0.55, -0.55, 7.5, 6.7, DECK2);
   const PLATE2 = '#2b1a44';
   const BINK = [CAST.red, CAST.gold, CAST.orange, CAST.blue];
   const NSZ2 = Math.max(px(d, 7.5), s * 0.40);
@@ -810,14 +817,30 @@ function drawKnow(game, become, parts) {
      below the scene as floating chips and needed reserved space outside it.
      They are cast into a plinth now, so they ARE the scene and the fit has to
      be told about the strip or it draws it off the bottom edge. */
-  const F = isoFit(w, h - CAP, 6.6, 1.9, 5.55, px(d, 5));
+  /* sy 1.9 -> 2.3: the deck is a solid now and hangs below the objects' floor,
+     and isoFit only reserves height for what stands UP from y=0. */
+  const F = isoFit(w, h - CAP, 6.6, 2.3, 5.55, px(d, 5));
   const s = F.s, ox = F.ox, oy = F.oy;
 
-  /* A3-e-a, off the design sheet: a BRASS deck under the whole bench. It was
-     a near-transparent plate of --panel-line, which is also the token that was
-     never declared — so this surface used to be painted in whatever colour the
-     previous draw call left behind. It is a chosen colour now. */
-  isoPlate(g, ox, oy, s, -0.45, -0.45, 7.5, 5.5, mixHex(CAST.bone, CAST.gold, 0.5));
+  /* A3-e-a, off the design sheet: a BRASS deck under the whole bench, with the
+   * name plinth as a bone plate standing on it. Two corrections to the version
+   * that first went in, both measured rather than felt:
+   *
+   * IT IS A SLAB, NOT A FIELD. Drawn as a flat isoPlate the deck had no faces
+   * and no shading, so a big pale diamond sat behind the objects and read as a
+   * rug rather than as a bench they stand on. isoBox gives it a top, a side and
+   * a front, which is what makes it an object in this projection.
+   *
+   * THE DECK IS DEEPER THAN THE SHEET'S. At mixHex(bone, gold, 0.5) the deck
+   * measured 1.19:1 against the bone plate — against a 3:1 floor for an edge
+   * carrying no text. Two near-white surfaces cannot separate by value however
+   * they are drawn, and the plinth was the one object on the bench that had to
+   * read as separate. Taken toward bronze it separates at about 3:1 and stays
+   * unmistakably the same warm metal. The plate itself is unchanged, so every
+   * lettering number measured for A3-e-a still holds: hands 9.41, aim 4.55,
+   * trigger 7.52. */
+  isoBox(g, ox, oy, s, -0.45, -0.34, -0.45, 7.5, 0.34, 5.5,
+         mixHex(mixHex(CAST.bone, CAST.gold, 0.5), '#7a5a12', 0.68), 1.15 * d);
 
   /* ---- the front row first? no: FAR THINGS FIRST in this projection, so the
      back row is drawn before the gauges that stand in front of it ---- */
