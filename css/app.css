@@ -512,6 +512,13 @@ button.alt[aria-pressed="true"]:not(:disabled){background:var(--panel);color:var
  * Set in the app's label voice rather than as prose, so it sounds like the
  * machine it introduces. --acid on --panel-2 measures 13.2:1.
  *
+ * PLACED UNDER THE GRAPHIC, at the owner's direction. The chart-anatomy
+ * practice this was built from puts the explaining line ABOVE the plot and
+ * keeps the footer for provenance — that is written up in the commit history
+ * and in dev_log. The owner has looked at both and wants it under the object,
+ * so under the object is where it goes; the label voice, the acid rule and the
+ * H6 retire-when-live behaviour are unchanged.
+ *
  * NAMED .standfirst, NOT .deck. `.deck` was already the bottom panel ROW —
  * a layout container with its own grid, background and border — and a second
  * rule of that name later in this file silently overrode its background,
@@ -522,7 +529,7 @@ button.alt[aria-pressed="true"]:not(:disabled){background:var(--panel);color:var
  * the card once the instrument has something to show, and the deck goes away
  * to leave the height to the picture. Nothing is lost — every deck's content
  * is also in that card's "?" panel, which is always there. */
-.standfirst{margin:0 0 6px;font-family:var(--mono);font-size:var(--fs-micro);
+.standfirst{margin:7px 0 0;font-family:var(--mono);font-size:var(--fs-micro);
   font-weight:700;letter-spacing:.09em;text-transform:uppercase;line-height:1.45;
   color:var(--acid);border-left:2px solid var(--acid);padding:3px 0 3px 7px;
   background:linear-gradient(90deg,rgba(245,230,99,.10),rgba(245,230,99,0))}
