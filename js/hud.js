@@ -1002,6 +1002,21 @@ export function updateRail(game) {
         ? 'It has never been killed, so it has never seen a kill. Round 1 until you win one.'
         : 'Everything it does, it learned from watching you. Nothing here was written by hand.';
   }
+  /* H6: A DECK RETIRES WHEN ITS INSTRUMENT WAKES UP.
+   *
+   * Each card explains itself while it has nothing to show, then gives the
+   * height back to the picture. The conditions are the ones each panel already
+   * uses for its own empty state, so a deck disappears at exactly the moment
+   * that panel starts drawing something worth reading — not on a timer.
+   * Nothing is lost when one goes: every sentence is also in that card's "?" */
+  const live = (sel, on) => {
+    const card = $(sel) && $(sel).closest('.card');
+    if (card) card.setAttribute('data-live', on ? '1' : '0');
+  };
+  live('cKnow', A.graded >= 600);
+  live('cLoop', !!game.lastAct);
+  live('cSense', !!game.obsIt);
+
   const cn = $('copyN');
   if (cn) cn.textContent = A.lessons.toLocaleString() + ' lessons';
   /* THE SAME RULE AS `noticed` ABOVE: this caption said "it started with

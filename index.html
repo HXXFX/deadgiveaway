@@ -238,15 +238,14 @@
            The meter and the three small meters that used to be here are gone —
            they were these three numbers a second time, which is a panel arguing
            with itself. See drawKnow in hud.js. -->
-      <canvas id="cKnow" height="300"></canvas>
-      <!-- WHAT IT LAST WORKED OUT, which used to be a card of its own titled
-           "Where it came from" holding one sentence. That was a hundred pixels
-           of panel for a line of prose, in a rail that was pushing the ray
-           diagram down to thirty-four pixels — and the player had asked for
-           less text and more picture in the same breath. It belongs here
-           anyway: it is the caption to this number. -->
-      <div class="said-sm" id="noticed">Nothing yet. It has an empty brain &mdash;
+      <!-- THE DECK, ABOVE THE PICTURE — see .deck in app.css for why it moved.
+           It says what the panel is while the panel has nothing to say, and
+           retires once the bench is live. Every word of it is still behind
+           the "?" above. -->
+      <div class="deck" id="noticed">Nothing yet. It has an empty brain &mdash;
         move, shoot, and it copies what it sees.</div>
+      <!-- THE BENCH. See drawKnow in hud.js. -->
+      <canvas id="cKnow" height="300"></canvas>
     </section>
 
     <section class="card">
@@ -270,9 +269,9 @@
            same way you read its off the header. Nothing extra, nothing
            missing.</p>
       </div>
-      <canvas id="cLoop" height="200"></canvas>
-      <p class="cap" id="cmpCap">Its live wants — each key, the turn, the
+      <p class="deck" id="cmpCap">Its live wants — each key, the turn, the
         trigger, the reload.</p>
+      <canvas id="cLoop" height="200"></canvas>
     </section>
 
     <section class="card grow">
@@ -295,8 +294,9 @@
            the input: the 43 numbers the policy receives each frame, live.
            Nothing here is something you cannot see on your own screen.</p>
       </div>
+      <p class="deck" id="senseCap">Its whole world, live — 43 numbers, and
+        nothing you don’t get too.</p>
       <canvas id="cSense"></canvas>
-      <p class="cap">Its whole world, live — 43 numbers, and nothing you don’t get too.</p>
     </section>
   </aside>
 

@@ -496,6 +496,32 @@ button.alt[aria-pressed="true"]:not(:disabled){background:var(--panel);color:var
   background:repeating-linear-gradient(0deg,rgba(0,0,0,.16) 0 1px,transparent 1px 3px)}
 .card canvas{display:block;width:100%;flex:1;min-height:0}
 .cap{margin:7px 0 0;font-size:var(--fs-small);line-height:1.5;color:var(--ink-2)}
+
+/* THE DECK — the line that says what an instrument is, ABOVE its picture.
+ *
+ * It used to be a paragraph BELOW the picture, and four rounds of options for
+ * making that paragraph cooler were all rejected. Looking up how the job is
+ * actually done says the slot was wrong, not the styling: the EU chart-anatomy
+ * guide puts the element explaining a chart directly under the title and above
+ * the plot, left-aligned to it, with only the source note below; the BBC house
+ * plot function left-aligns a title and SUBTITLE above the chart and puts only
+ * attribution in the footer; the FT visual vocabulary shares the skeleton.
+ * Readers look ABOVE a picture to find out what it is and below it only for
+ * provenance, which is why a caption under this one always read as bolted on.
+ *
+ * Set in the app's label voice rather than as prose, so it sounds like the
+ * machine it introduces. --acid on --panel-2 measures 13.2:1.
+ *
+ * It is the EMPTY STATE's explanation (option H6): hud.js drops [data-live] on
+ * the card once the instrument has something to show, and the deck goes away
+ * to leave the height to the picture. Nothing is lost — every deck's content
+ * is also in that card's "?" panel, which is always there. */
+.deck{margin:0 0 6px;font-family:var(--mono);font-size:var(--fs-micro);
+  font-weight:700;letter-spacing:.09em;text-transform:uppercase;line-height:1.45;
+  color:var(--acid);border-left:2px solid var(--acid);padding:3px 0 3px 7px;
+  background:linear-gradient(90deg,rgba(245,230,99,.10),rgba(245,230,99,0))}
+.deck b{color:var(--ink)}
+.card[data-live="1"] .deck{display:none}
 /* ---- per-panel help ------------------------------------------------------ */
 /* THE HELP IS THE BACK OF THE CARD. The explanations used to sit under each
    viz as captions; the player asked for the picture to carry the live info
