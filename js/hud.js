@@ -401,6 +401,28 @@ export function drawLoop(game) {
   isoPlate(g, ox, oy, s, -0.55, -0.55, 7.5, 6.7, DECK2);
 
 
+  /* A NAME STRIP, drawn in DEPTH ORDER with the objects, not all at the end.
+   *
+   * These four labels used to be painted last, over everything — which put the
+   * "keys" strip (back, z 2.35) on top of the tall FIRE bar in front of it
+   * (z 3.5), so a front object was covered by a label that belongs behind it.
+   * That is a painter's-order bug: nearer things must be drawn later. So the
+   * two BACK strips (keys, mouse) are drawn before the front trigger bars and
+   * the two FRONT strips (fire, reload) after them.
+   *
+   * NEUTRAL PLATE, NOT BRASS: this desk already spends yellow on meaning (the
+   * mouse body, the aim fan), so a brass name strip would put the labels in the
+   * data's colour family. A desaturated plate reads as chrome, carries ink at
+   * about 9:1, and each name still wears its own control's colour lifted toward
+   * white. --ink alternatives measured 3.9-4.0 on the dark deck, under the floor. */
+  const PLATE2 = '#2b1a44';
+  const NSZ2 = Math.max(px(d, 7.5), s * 0.40);
+  const strip = (nm, sx0, sz0, sw, col) => {
+    isoBox(g, ox, oy, s, sx0, 0, sz0, sw, 0.46, 0.22, PLATE2, 1.05 * d);
+    const q = isoPt(ox, oy, s, sx0 + 0.16, 0.12, sz0 + 0.22);
+    onIsoFace(g, q[0], q[1], nm, NSZ2, mixHex(col, '#ffffff', 0.45), 'left');
+  };
+
   /* the keyboard, at the back. A held key is a key that is DOWN. */
   isoPlate(g, ox, oy, s, -0.3, -0.3, 3.7, 2.7, rgba(P.grid, 0.34));
   const CAPS = [['W', 1, 0, 0], ['A', 0, 1, 1], ['S', 1, 1, 2], ['D', 2, 1, 3]];
@@ -434,6 +456,10 @@ export function drawLoop(game) {
     }
   }
 
+  /* the two BACK name strips, before the front bars can cover them */
+  strip('keys', -0.3, 2.35, 3.7, CAST.red);
+  strip('mouse', 4.05, 2.30, 1.7, CAST.gold);
+
   /* and the two triggers, nearest the viewer */
   const loading = !!(f && f.reloadUntil > game.now);
   const bars = [
@@ -449,39 +475,9 @@ export function drawLoop(game) {
          t[0], t[1] - px(d, 4), col, VAL, 900, 'center');
   }
 
-  /* THE FOUR NAMES LIE ON THE DESK, IN ITS PLANE.
-   *
-   * They were chips at the four CORNERS OF THE CANVAS — as far from the thing
-   * each one names as it is possible to get, and the clearest case of the
-   * owner's "labels pasted on". Each now lies flat on the deck just in front
-   * of its own region, sheared into the ground plane like a marking painted
-   * on a workshop floor, so the name and the object share a surface.
-   *
-   * --ink-3 rather than the objects' colours: the deck is the dark panel, and
-   * measured there the control colours run 3.9-4.0, under the floor, while
-   * --ink-3 is 7.7. Colour is carried by the objects themselves here. */
-  /* ONE CAST STRIP PER REGION, the same language as the bench next door.
-     Laid FLAT on the deck first (proper isometric floor marking) it worked but
-     read faintly: --ink-3 on the dark deck is 7.7:1 against 17:1 for ink on
-     brass, and a letter lying in the ground plane is sheared twice over. A
-     name standing on a strip is sheared once and sits on metal. */
-  /* NEUTRAL PLATE, NOT BRASS. This desk already spends yellow on meaning —
-     the mouse body and every mark in the aim fan are CAST.gold — so a brass
-     name strip put the labels in the same colour family as the data and made
-     the quietest thing on the panel compete with the loudest. A desaturated
-     plate reads as chrome, carries ink at about 9:1, and leaves yellow to say
-     the one thing it is supposed to say here. */
-  const PLATE2 = '#2b1a44';
-  const BINK = [CAST.red, CAST.gold, CAST.orange, CAST.blue];
-  const NSZ2 = Math.max(px(d, 7.5), s * 0.40);
-  const STRIPS = [['keys', -0.3, 2.35, 3.7], ['mouse', 4.05, 2.30, 1.7],
-                  ['fire', 0.1, 4.62, 1.9], ['reload', 2.5, 4.62, 1.9]];
-  for (let i = 0; i < STRIPS.length; i++) {
-    const [nm, sx0, sz0, sw] = STRIPS[i];
-    isoBox(g, ox, oy, s, sx0, 0, sz0, sw, 0.46, 0.22, PLATE2, 1.05 * d);
-    const q = isoPt(ox, oy, s, sx0 + 0.16, 0.12, sz0 + 0.22);
-    onIsoFace(g, q[0], q[1], nm, NSZ2, mixHex(BINK[i], '#ffffff', 0.45), 'left');
-  }
+  /* the two FRONT name strips, nearest the viewer, drawn last of all */
+  strip('fire', 0.1, 4.62, 1.9, CAST.orange);
+  strip('reload', 2.5, 4.62, 1.9, CAST.blue);
 }
 
 /* ---- 3. WHAT IT TOOK FROM YOU --------------------------------------------
