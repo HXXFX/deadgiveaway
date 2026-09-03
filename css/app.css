@@ -531,8 +531,17 @@ button.alt[aria-pressed="true"]:not(:disabled){background:var(--panel);color:var
  * is also in that card's "?" panel, which is always there. */
 .standfirst{margin:7px 0 0;font-family:var(--mono);font-size:var(--fs-micro);
   font-weight:700;letter-spacing:.09em;text-transform:uppercase;line-height:1.45;
-  color:var(--acid);border-left:2px solid var(--acid);padding:3px 0 3px 7px;
-  background:linear-gradient(90deg,rgba(245,230,99,.10),rgba(245,230,99,0))}
+  /* --ink-3, NOT --acid. Two reasons and only one of them is brightness.
+     The header of this file reserves the first three colours: hot is IT, cool
+     is YOU, acid is WHAT IT KNOWS ABOUT YOU, and nothing decorative may use
+     them. A sentence explaining what a panel is knows nothing about anybody,
+     so acid was claiming a meaning it does not carry — and at 13.17:1 it was
+     also the brightest thing in the card, louder than the readings it
+     introduces. --ink-3 is the colour this app already uses for small labels:
+     7.71:1, over the floor, at the aim, and reserved for nothing.
+     Dimming the acid instead was measured and rejected — 45% toward the card
+     still reads as acid at 4.79, and by 60% it is calm and FAILING at 3.12. */
+  color:var(--ink-3);border-left:2px solid var(--track);padding:3px 0 3px 7px}
 .standfirst b{color:var(--ink)}
 .card[data-live="1"] .standfirst{display:none}
 /* ---- per-panel help ------------------------------------------------------ */
