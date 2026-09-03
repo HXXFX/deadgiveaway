@@ -193,11 +193,29 @@ window.__brain = { save: saveBrain, offer: offerSavedBrain };
    glass. It exists to split a bug report in half. A band of shifted pixels at
    the canvas edge can come from the game's drawing or from everything layered
    on top of it -- and the second kind can be machine-specific (compositor,
-   driver, display scale), invisible on the machine doing the debugging. A
-   42-configuration harness sweep (dev_log/audit/probe-crt-view.html) found
-   the filter clean here; this flag lets the machine that CAN see the artifact
-   run the same A/B in one reload. setCrt(false) un-curves the pointer to
-   match the now-flat picture -- the two must always read the same formula. */
+   driver, display scale), invisible on the machine doing the debugging.
+
+   THE REPORT IT WAS BUILT FOR IS CLOSED. The band was real; it was the tube's
+   drop shadow enlarging the filter region so the displacement map no longer
+   lined up with the picture; it is fixed in app.css. HANDOFF 89 has the
+   numbers. The flag stays for the next one, with two warnings attached,
+   because both of them cost rounds:
+
+   - IT WAS BROKEN, silently, for as long as the filter lived on .tube. The
+     line below sets filter:none on the CANVAS, so the flag hid the scanlines
+     and the glass and left the bend running -- in flat contradiction of the
+     sentence above it, which promised to take the bend off. Two A/B runs were
+     requested against a switch that could not answer them. Now that the filter
+     is on the canvas the flag does what it claims. IF THE FILTER EVER MOVES,
+     MOVE THIS WITH IT, and assert the computed style rather than trusting the
+     line that sets it.
+   - The 42-configuration sweep (dev_log/audit/probe-crt-view.html) reported
+     the filter clean, and it was right: the filter WAS clean. The fault was in
+     the region the filter was handed. A sweep that varies the right thing
+     exhaustively can still be blind to the thing it never varied.
+
+   setCrt(false) un-curves the pointer to match the now-flat picture -- the two
+   must always read the same formula. */
 if (_q.get('nocrt') === '1') {
   setCrt(false);
   $('view').style.filter = 'none';

@@ -111,7 +111,17 @@
          reference this game is drawn from was made for a screen that bulged.
          The bend is an SVG displacement filter over the arena canvas only — the
          panels stay flat and legible — and render.js applies the same curve to
-         the pointer so what you click is what you see. See CRT_K there. -->
+         the pointer so what you click is what you see. See CRT_K there.
+
+         IT HAS TO BE THE CANVAS, NOT THIS DIV, and the reason is not obvious.
+         The tube carries a drop shadow; a shadow is ink overflow; ink overflow
+         enlarges an element's filter region. With the bend declared up here the
+         displacement map stretched across the tube PLUS its shadow while the
+         picture stayed the size of the tube, so the two were out of register
+         and a band of shifted pixels sat along the bottom edge. Never move the
+         filter back onto this div, and never give the canvas a shadow, outline
+         or drop-shadow of its own — either one reopens it in silence. The
+         measurements are in app.css and dev_log/HANDOFF.md section 89. -->
     <div class="tube" id="tube">
       <canvas id="view" tabindex="0" aria-label="Arena. Move with W A S D. Aim with the mouse. Click to shoot."></canvas>
       <div class="scan" aria-hidden="true"></div>
@@ -426,7 +436,11 @@
 </script>
 <script type="module" src="./js/main.js"></script>
 <!-- The displacement map is generated once at startup from the same constant
-     the pointer correction uses, so the picture and the mouse cannot drift. -->
+     the pointer correction uses, so the picture and the mouse cannot drift 
+     PROVIDED the filter stays on the canvas. While it was declared on .tube
+     they did drift, and nobody noticed for months: measured against a fixed
+     corner, the picture moved about 30px where curvePointer was correcting for
+     23.3px, so aim was being adjusted for a curve the screen did not have. -->
 <svg class="crtdefs" aria-hidden="true" width="0" height="0">
   <filter id="crtBend" x="0%" y="0%" width="100%" height="100%"
           color-interpolation-filters="sRGB">
