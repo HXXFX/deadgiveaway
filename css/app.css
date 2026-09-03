@@ -29,6 +29,17 @@
 :root{
   --bg:#0a0410; --panel:#1c0f2e; --panel-2:#25143c;
   --line:#3c1d5e; --raise:#5b2d8a; --track:#7a63a0;
+  /* THE GROUND EVERY 3-D PANEL STANDS ITS OBJECTS ON, and for a long time it
+     did not exist. hud.js and viz3d.js both read tok('panel-line') into P.grid
+     and draw eight plates with rgba(P.grid, 0.3-0.45) — but --panel-line was
+     never declared, so tok returned '', rgba built "rgba(NaN,NaN,NaN,.3)", and
+     canvas SILENTLY IGNORES an invalid fillStyle and keeps the previous one.
+     Every one of those plates was therefore painted in whatever colour the
+     last drawing call happened to leave behind: the controls desk came out
+     brass because the label strips drawn just before it were brass, and it had
+     been other colours before that. A missing custom property is not a
+     fallback, it is a stale-paint bug with no error attached. */
+  --panel-line:#3c1d5e;
   /* --ink-3 CARRIES ALMOST EVERY SMALL LABEL IN THIS APP, and at #a48fc2 it
      measured 5.9:1 on the card ground — over the 4.5 floor, but that floor is
      for body text at comfortable sizes, not for eleven-pixel uppercase tracked

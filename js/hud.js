@@ -19,7 +19,7 @@
  * number can be flattered by its baseline, the baseline is drawn next to it.
  */
 import { FOE, WORLD, MAG } from './config.js';
-import { tok, mixHex, rgba, fitCanvas, clamp, hex2rgb } from './util.js';
+import { tok, mixHex, rgba, fitCanvas, clamp, hex2rgb, getGround } from './util.js';
 import { RAYS, RAY_MAX, OBS, NET, RNET, ACT, sig, agentScore } from './agent.js';
 import { rehearsalView } from './practice.js';
 import { CAST, dim, INK, iso, isoBox, isoPlate, isoFit,
@@ -286,9 +286,38 @@ export function drawSense(game) {
   g.fillStyle = CAST.blue; g.fill();
   g.strokeStyle = INK; g.lineWidth = 1.3 * d; g.stroke();
   /* the distance, ON the line, which is where the eye already is */
-  label(g, d, (obs[18] * RAY_MAX).toFixed(1) + ' m',
-        (cx + px2) / 2, (cy + pz2) / 2 - px(d, 5),
-        clear ? CAST.bone : P.ink3, 9, 'center');
+  /* THE DOME IS THE DIAL. C4-b-a, off the design sheet: the range set in the
+   * app's display face, in the middle of the dome, the way every other big
+   * number in this game is set.
+   *
+   * SAID PLAINLY, because it is the one number on the page that does not clear
+   * the bar: bone on the red hub measures 3.49 against a 4.5 floor. The hard
+   * offset shadow this face always carries is what makes it readable anyway —
+   * it puts a near-black edge between the letter and the red — but a shadow is
+   * not contrast and the measurement does not improve. Chosen with that known.
+   * The shadow is therefore drawn heavier here than the CSS uses, since it is
+   * doing more work than usual.
+   *
+   * Blocked, there IS no range, so the dial shows a dash rather than holding a
+   * stale number — the failure this treatment had to answer for. */
+  {
+    const txt = clear ? (obs[18] * RAY_MAX).toFixed(1) : '--';
+    /* SIZED SO THE DOME SURVIVES. Tied to R alone this reached 60px in a
+       193px canvas and buried the sixteen fins the panel exists to show — the
+       reading ate its own picture. Capped, it holds the proportion the sheet
+       was picked at. */
+    const fs = Math.max(px(d, 14), Math.min(R * 0.34, px(d, 24)));
+    g.save();
+    g.font = '900 ' + fs + 'px ' + DISPLAY;
+    g.textAlign = 'center';
+    g.transform(1, 0, -0.16, 1, 0, 0);
+    g.fillStyle = rgba(INK, 0.85);
+    g.fillText(txt, cx + fs * 0.075, cy + fs * 0.36);
+    g.fillStyle = clear ? CAST.bone : P.ink3;
+    g.fillText(txt, cx, cy + fs * 0.29);
+    g.restore();
+    label(g, d, 'metres', cx, cy + fs * 0.62, rgba(CAST.bone, 0.8), 8, 'center');
+  }
 
   /* ---- the base: a cabinet slab with the two remaining readings on it ---- */
   const F = oblFit(w, BASE_H, 8.0, 1.0, 0.7, px(d, 3));
@@ -309,9 +338,16 @@ export function drawSense(game) {
      where the front face is a true rectangle — so the type needs no shear and
      no plate, it simply sits on the face. The slab is dim(bone) at about
      rgb(179), and INK on its shaded front measures ~6.9:1. */
-  const cap1 = obl(bx, by, F.s, 0.35, 0.10, 0);
+  /* THE TWO READINGS TAKE OPPOSITE ENDS OF THE FACE, like two gauges on the
+     front of a machine. Both were set at 9px and crowded into the left half:
+     the face measures 224 x 28 px in the real rail panel, so the type was
+     under this app's own 11px floor while two thirds of the plate sat empty.
+     At 11px "LINE OPEN 12.3S" needs 127px against the 112px that was there,
+     which is why the second reading moves to the right edge rather than the
+     type staying small. */
+  const cap1 = obl(bx, by, F.s, 0.3, 0.12, 0);
   text(g, d, (clear ? 'line open ' + (obs[22] * 2).toFixed(1) + 's' : 'no line')
-       .toUpperCase(), cap1[0], cap1[1], INK, 9, 700, 'left');
+       .toUpperCase(), cap1[0], cap1[1], INK, 11, 700, 'left');
 
   /* and the lamp: something in the air at it */
   const hot2 = obs[30] > 0.5;
@@ -331,9 +367,9 @@ export function drawSense(game) {
      and the owner saw a stray "COMING" floating outside the graphic. chip()
      clamps it into the canvas, and the wording is short enough to fit beside
      the lamp rather than needing the clamp to save it. */
-  const cap2 = obl(bx, by, F.s, 4.35, 0.10, 0);
+  const cap2 = obl(bx, by, F.s, 7.7, 0.12, 0);
   text(g, d, hot2 ? 'incoming' : 'clear', cap2[0], cap2[1],
-       hot2 ? mixHex(CAST.red, INK, 0.35) : INK, 9, 700, 'left');
+       hot2 ? mixHex(CAST.red, INK, 0.35) : INK, 11, 700, 'right');
 }
 
 /* ---- 2. ITS HANDS --------------------------------------------------------
@@ -369,7 +405,7 @@ export function drawLoop(game) {
    */
   const F = isoFit(w, h - px(d, 22), 6.4, 2.2, 5.6, px(d, 9));
   const s = F.s, ox = F.ox, oy = F.oy + px(d, 14);
-  isoPlate(g, ox, oy, s, -0.55, -0.55, 7.5, 6.7, rgba(P.grid, 0.30));
+
 
   /* the keyboard, at the back. A held key is a key that is DOWN. */
   isoPlate(g, ox, oy, s, -0.3, -0.3, 3.7, 2.7, rgba(P.grid, 0.34));
@@ -435,14 +471,39 @@ export function drawLoop(game) {
      read faintly: --ink-3 on the dark deck is 7.7:1 against 17:1 for ink on
      brass, and a letter lying in the ground plane is sheared twice over. A
      name standing on a strip is sheared once and sits on metal. */
-  const BRASS2 = mixHex(CAST.bone, CAST.gold, 0.55);
+  /* NEUTRAL PLATE, NOT BRASS. This desk already spends yellow on meaning —
+     the mouse body and every mark in the aim fan are CAST.gold — so a brass
+     name strip put the labels in the same colour family as the data and made
+     the quietest thing on the panel compete with the loudest. A desaturated
+     plate reads as chrome, carries ink at about 9:1, and leaves yellow to say
+     the one thing it is supposed to say here. */
+  /* B6-e-b, off the design sheet. The desk takes the colour of the room the
+     fight is happening in, and the names sit on FIXED dark strips.
+     That split is the whole point and it was measured: a venue-coloured deck
+     with ink written straight on it runs 4.47 to 6.13 across the nine rooms —
+     the club fails the 4.5 floor outright. Because the strip is a constant,
+     the room can be as saturated as it likes and the text never moves, which
+     also frees each name to wear its own control's colour lifted toward white
+     rather than being flattened to grey: measured 6.8 keys, 12.75 mouse,
+     8.77 reload against this strip.
+     getGround() rather than tok(): the arena sets a venue palette while it
+     draws and does not clear it, so tok would answer with room colours by
+     accident. Asking for the ground map directly is the same answer on
+     purpose, and it returns null on the design sheet, where there is no room. */
+  const room = getGround();
+  const DECK2 = room && room.floor2
+    ? mixHex(room.floor2, CAST.bone, 0.2) : dim(CAST.bone, 0.7);
+  isoPlate(g, ox, oy, s, -0.55, -0.55, 7.5, 6.7, DECK2);
+  const PLATE2 = '#2b1a44';
+  const BINK = [CAST.red, CAST.gold, CAST.orange, CAST.blue];
   const NSZ2 = Math.max(px(d, 7.5), s * 0.40);
   const STRIPS = [['keys', -0.3, 2.35, 3.7], ['mouse', 4.05, 2.30, 1.7],
                   ['fire', 0.1, 4.62, 1.9], ['reload', 2.5, 4.62, 1.9]];
-  for (const [nm, sx0, sz0, sw] of STRIPS) {
-    isoBox(g, ox, oy, s, sx0, 0, sz0, sw, 0.46, 0.22, BRASS2, 1.05 * d);
+  for (let i = 0; i < STRIPS.length; i++) {
+    const [nm, sx0, sz0, sw] = STRIPS[i];
+    isoBox(g, ox, oy, s, sx0, 0, sz0, sw, 0.46, 0.22, PLATE2, 1.05 * d);
     const q = isoPt(ox, oy, s, sx0 + 0.16, 0.12, sz0 + 0.22);
-    onIsoFace(g, q[0], q[1], nm, NSZ2, rgba(INK, 0.88), 'left');
+    onIsoFace(g, q[0], q[1], nm, NSZ2, mixHex(BINK[i], '#ffffff', 0.45), 'left');
   }
 }
 
@@ -752,7 +813,11 @@ function drawKnow(game, become, parts) {
   const F = isoFit(w, h - CAP, 6.6, 1.9, 5.55, px(d, 5));
   const s = F.s, ox = F.ox, oy = F.oy;
 
-  isoPlate(g, ox, oy, s, -0.45, -0.45, 7.5, 5.5, rgba(P.grid, 0.34));
+  /* A3-e-a, off the design sheet: a BRASS deck under the whole bench. It was
+     a near-transparent plate of --panel-line, which is also the token that was
+     never declared — so this surface used to be painted in whatever colour the
+     previous draw call left behind. It is a chosen colour now. */
+  isoPlate(g, ox, oy, s, -0.45, -0.45, 7.5, 5.5, mixHex(CAST.bone, CAST.gold, 0.5));
 
   /* ---- the front row first? no: FAR THINGS FIRST in this projection, so the
      back row is drawn before the gauges that stand in front of it ---- */
@@ -828,7 +893,14 @@ function drawKnow(game, become, parts) {
    * because gold and brass are the same family — it keeps the least colour of
    * the three, which is the honest cost of lettering in colour on metal. */
   const NMS = ['hands', 'aim', 'trigger'];
-  const BRASS = mixHex(CAST.bone, CAST.gold, 0.55);
+  /* THE PLINTH IS A BONE PLATE ON THE BRASS, because brass on brass is one
+     metal and the strip survived only as an outline. Names go 0.5 toward ink
+     rather than 0.74: on this near-white plate that measures hands 9.41,
+     aim 4.55, trigger 7.52 — every one over the floor, and the colours keep
+     half their strength instead of a quarter. Aim is the tight one at 4.55,
+     because gold against a near-white plate is the hardest pairing in the
+     panel; it is over the floor and it is not over this app's aim of 7. */
+  const BRASS = '#f7f2e6';
   /* THE LETTER IS SIZED FROM THE OBJECT, NOT FROM THE DEVICE. A fixed 10*d put
      12.5 buffer px of type on a strip 11 buffer px tall in the real 196px-wide
      rail panel — the caption outgrew the thing it was cast into. Tying it to
@@ -861,7 +933,7 @@ function drawKnow(game, become, parts) {
     /* walk along the strip in SCREEN x, then step down the face's own slope so
        the run of names sits in the plane rather than across it */
     const px0 = p0[0] + run * 0.866, py0 = p0[1] + run * 0.5;
-    onIsoFace(g, px0, py0, NMS[i], NSZ, mixHex(cols[i], INK, 0.74), 'left');
+    onIsoFace(g, px0, py0, NMS[i], NSZ, mixHex(cols[i], INK, 0.5), 'left');
     run += wds[i] + gap;
   }
   /* and the sentence in the empty corner above the bench, where there is
