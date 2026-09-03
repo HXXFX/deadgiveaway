@@ -40,6 +40,14 @@
      been other colours before that. A missing custom property is not a
      fallback, it is a stale-paint bug with no error attached. */
   --panel-line:#3c1d5e;
+  /* THE DESCRIPTION UNDER EACH PICTURE, and a role name rather than a colour
+     name so it cannot drift into decoration elsewhere. Chosen off the design
+     sheet from eight unreserved hues all tuned to ~8:1, so it was picked on
+     hue rather than on brightness. Measured 7.95:1 on the card and 8.55:1 on
+     the deck row. It sits 109 RGB units from --good, past the 90 this app
+     already uses as the bar for two colours being clearly different, so a
+     green-grey sentence cannot be read as a status green. */
+  --standfirst:#9ab9aa; --standfirst-rule:#778889;
   /* --ink-3 CARRIES ALMOST EVERY SMALL LABEL IN THIS APP, and at #a48fc2 it
      measured 5.9:1 on the card ground — over the 4.5 floor, but that floor is
      for body text at comfortable sizes, not for eleven-pixel uppercase tracked
@@ -541,7 +549,7 @@ button.alt[aria-pressed="true"]:not(:disabled){background:var(--panel);color:var
      7.71:1, over the floor, at the aim, and reserved for nothing.
      Dimming the acid instead was measured and rejected — 45% toward the card
      still reads as acid at 4.79, and by 60% it is calm and FAILING at 3.12. */
-  color:var(--ink-3);border-left:2px solid var(--track);padding:3px 0 3px 7px}
+  color:var(--standfirst);border-left:2px solid var(--standfirst-rule);padding:3px 0 3px 7px}
 .standfirst b{color:var(--ink)}
 .card[data-live="1"] .standfirst{display:none}
 /* ---- per-panel help ------------------------------------------------------ */
