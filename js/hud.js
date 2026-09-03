@@ -326,8 +326,16 @@ export function drawSense(game) {
 
   /* how long the line has been open, as a bar cut into the face */
   const openFor = clamp((obs[22] * 2) / 2, 0, 1);
-  const b0 = obl(bx, by, F.s, 0.35, 0.24, 0);
-  const b1 = obl(bx, by, F.s, 3.4, 0.62, 0);
+  /* THE GAUGE STACKS ABOVE THE CAPTION; IT USED TO LIE ACROSS IT. At
+     y 0.24..0.62 this bar covered 6.7 to 17.4px of a ~27px face while the
+     caption below it ran from 3.4px to about 11.4px, so "NO LINE" was drawn
+     straight through the bar. Two faults, not one: the words collided with the
+     graphic, and the bar is rgba(INK,.6) while the caption is INK, so the
+     overlapping half was dark type on a dark ground and lost most of the 6.9:1
+     the bone face was chosen to give it. Raised to 0.52..0.88 the two stack
+     with about 3px of face between them and the caption keeps its own band. */
+  const b0 = obl(bx, by, F.s, 0.35, 0.52, 0);
+  const b1 = obl(bx, by, F.s, 3.4, 0.88, 0);
   g.fillStyle = rgba(INK, 0.6);
   g.fillRect(b0[0], b1[1], b1[0] - b0[0], b0[1] - b1[1]);
   g.fillStyle = clear ? CAST.gold : dim(CAST.gold);
@@ -368,7 +376,11 @@ export function drawSense(game) {
      clamps it into the canvas, and the wording is short enough to fit beside
      the lamp rather than needing the clamp to save it. */
   const cap2 = obl(bx, by, F.s, 7.7, 0.12, 0);
-  text(g, d, hot2 ? 'incoming' : 'clear', cap2[0], cap2[1],
+  /* UPPERCASED LIKE ITS OPPOSITE NUMBER. cap1 calls .toUpperCase() and this one
+     did not, so the slab read "NO LINE ... clear" - two readings on one machined
+     face in two different voices, which is most of why the pair looked pasted
+     on rather than engraved. */
+  text(g, d, (hot2 ? 'incoming' : 'clear').toUpperCase(), cap2[0], cap2[1],
        hot2 ? mixHex(CAST.red, INK, 0.35) : INK, 11, 700, 'right');
 }
 

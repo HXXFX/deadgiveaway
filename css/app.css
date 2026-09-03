@@ -564,8 +564,8 @@ button.alt[aria-pressed="true"]:not(:disabled){background:var(--panel);color:var
  * practice this was built from puts the explaining line ABOVE the plot and
  * keeps the footer for provenance — that is written up in the commit history
  * and in dev_log. The owner has looked at both and wants it under the object,
- * so under the object is where it goes; the label voice, the acid rule and the
- * H6 retire-when-live behaviour are unchanged.
+ * so under the object is where it goes; the label voice and the acid rule are
+ * unchanged. The H6 retire-when-live behaviour is GONE — see below.
  *
  * NAMED .standfirst, NOT .deck. `.deck` was already the bottom panel ROW —
  * a layout container with its own grid, background and border — and a second
@@ -573,10 +573,19 @@ button.alt[aria-pressed="true"]:not(:disabled){background:var(--panel);color:var
  * padding, border and font. The newspaper term for the line under a headline
  * is the standfirst, which is exactly this element and collides with nothing.
  *
- * It is the EMPTY STATE's explanation (option H6): hud.js drops [data-live] on
- * the card once the instrument has something to show, and the deck goes away
- * to leave the height to the picture. Nothing is lost — every deck's content
- * is also in that card's "?" panel, which is always there. */
+ * IT IS PERMANENT, NOT AN EMPTY STATE — changed 2026-09-03 on a bug report.
+ * It began as option H6, which hid the line once hud.js put [data-live] on the
+ * card, reasoning that a working instrument speaks for itself and the height
+ * belongs to the picture. In play that reads as a fault rather than a design:
+ * the owner reported the description "will disappear sometimes", and sometimes
+ * is precisely when the panel starts working. All six go at once, a few hundred
+ * graded frames in, with nothing on screen to say why or how to get them back.
+ *
+ * A caption that leaves at the moment the reader finally has something to read
+ * is the wrong caption. There is room under every graphic for it — the panels
+ * carry empty space below the object at every size this app lays out — so it
+ * stays up. The per-card "?" still holds the longer explanation; this line is
+ * the one-sentence version and is now always present. */
 .standfirst{margin:7px 0 0;font-family:var(--mono);font-size:var(--fs-micro);
   font-weight:700;letter-spacing:.09em;text-transform:uppercase;line-height:1.45;
   /* --ink-3, NOT --acid. Two reasons and only one of them is brightness.
@@ -591,7 +600,10 @@ button.alt[aria-pressed="true"]:not(:disabled){background:var(--panel);color:var
      still reads as acid at 4.79, and by 60% it is calm and FAILING at 3.12. */
   color:var(--standfirst);border-left:2px solid var(--standfirst-rule);padding:3px 0 3px 7px}
 .standfirst b{color:var(--ink)}
-.card[data-live="1"] .standfirst{display:none}
+/* NO [data-live] RULE HERE ON PURPOSE. Hiding this line once the card went live
+   was the H6 behaviour and it was reported as a bug — see the note above.
+   hud.js still sets [data-live] and other rules read it; it must not be wired
+   back to this element. */
 /* ---- per-panel help ------------------------------------------------------ */
 /* THE HELP IS THE BACK OF THE CARD. The explanations used to sit under each
    viz as captions; the player asked for the picture to carry the live info
