@@ -83,7 +83,18 @@ export function dim(hex, keep) {
   const t = keep === undefined ? 0.72 : keep;      /* how far toward grey */
   const v = 0.62;                                  /* and how bright that grey is */
   const m = (x) => Math.round((x * (1 - t) + l * t) * v + 34);
-  return `rgb(${m(c[0])},${m(c[1])},${m(c[2])})`;
+  /* HEX, NOT rgb(). util.js says it in as many words: the renderer re-parses a
+     face colour with hex2rgb at flush time, and handing it an rgb(...) string
+     fails silently. dim() is the app's INACTIVE treatment and its output goes
+     straight into isoBox and oblBox all over hud.js — the dimmed keys, the
+     spent gauges, the copy box, the dial plinth, the base slab under what it
+     sees. Every one of those faces was getting NaN, and canvas answers an
+     invalid fillStyle by keeping the previous one: measured live, the sense
+     slab painted full bone rgb(243,232,212) instead of a dimmed grey, and the
+     bench plinth painted pure black. Same silent class as the undeclared
+     --panel-line, one layer down. */
+  const q = (x) => ('0' + Math.max(0, Math.min(255, m(x))).toString(16)).slice(-2);
+  return '#' + q(c[0]) + q(c[1]) + q(c[2]);
 }
 
 function facePath(g, pts, col, k, lw) {
