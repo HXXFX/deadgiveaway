@@ -336,7 +336,7 @@ view.addEventListener('mousedown', (e) => {
   view.focus();
   if (e.button === 2 || e.button === 1) {           /* right / middle: orbit */
     e.preventDefault();
-    if (input.camera === 'top') dragging = { x: e.clientX, y: e.clientY };
+    if (input.camera === 'top') { cancelSnap(); dragging = { x: e.clientX, y: e.clientY }; }
     return;
   }
   e.preventDefault();
@@ -348,6 +348,7 @@ view.addEventListener('contextmenu', (e) => e.preventDefault());
 view.addEventListener('wheel', (e) => {
   if (input.camera !== 'top') return;
   e.preventDefault();
+  cancelSnap();
   zoom(e.deltaY > 0 ? CAM.ZOOM_STEP : 1 / CAM.ZOOM_STEP);
 }, { passive: false });
 
@@ -527,9 +528,44 @@ addEventListener('keydown', (e) => {
 });
 
 /* ---- view gizmo ---------------------------------------------------------- */
+/* SMOOTH SNAP-BACK. Double-clicking the cube (or pressing reset) used to hard-
+   cut to the default view — the camera state was overwritten in one frame and
+   the picture jumped. Now it EASES there: the reset seeds a tween of the only
+   camera state there is (yaw, pitch, dist), and the frame loop advances it by
+   wall-clock time so the same draw path renders the rotation. Any fresh drag or
+   zoom cancels it, so a snap in progress never fights the hand.
+
+   Yaw takes the SHORT way home. Orbiting never wraps cam.yaw, so a view spun
+   round twice sits at ~4π; animating that straight to 0 would unwind two whole
+   turns. The target is the nearest full-turn equivalent of 0 instead, so the
+   picture rotates by the smallest arc and lands on the default orientation. */
+let camTween = null;
+const _easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+function snapView() {
+  const TAU = Math.PI * 2;
+  camTween = {
+    from: { yaw: cam.yaw, pitch: cam.pitch, dist: cam.dist },
+    to: { yaw: Math.round(cam.yaw / TAU) * TAU, pitch: CAM.TOP_PITCH, dist: CAM.TOP_DIST },
+    start: performance.now(), dur: 380,
+  };
+}
+function stepCamTween(now) {
+  if (!camTween) return;
+  const t = Math.min(1, (now - camTween.start) / camTween.dur);
+  const e = _easeInOut(t), a = camTween.from, b = camTween.to;
+  cam.yaw = a.yaw + (b.yaw - a.yaw) * e;
+  cam.pitch = a.pitch + (b.pitch - a.pitch) * e;
+  cam.dist = a.dist + (b.dist - a.dist) * e;
+  game.camYaw = cam.yaw;
+  /* at the end, land on the canonical defaults exactly — this also clears
+     userZoom via resetView(), so the room re-fits as it does for a fresh view */
+  if (t >= 1) { resetView(); game.camYaw = 0; camTween = null; }
+}
+/* a new gesture always wins over a snap in flight */
+const cancelSnap = () => { camTween = null; };
 const cube = $('cube');
 let gizDrag = null;
-cube.addEventListener('mousedown', (e) => { e.preventDefault(); gizDrag = { x: e.clientX, y: e.clientY }; });
+cube.addEventListener('mousedown', (e) => { e.preventDefault(); cancelSnap(); gizDrag = { x: e.clientX, y: e.clientY }; });
 addEventListener('mousemove', (e) => {
   if (!gizDrag) return;
   orbit(-(e.clientX - gizDrag.x) * CAM.ORBIT_SENS * 1.6,
@@ -538,13 +574,13 @@ addEventListener('mousemove', (e) => {
   gizDrag.x = e.clientX; gizDrag.y = e.clientY;
 });
 addEventListener('mouseup', () => { gizDrag = null; });
-cube.addEventListener('dblclick', () => { resetView(); game.camYaw = 0; });
+cube.addEventListener('dblclick', () => { snapView(); });
 cube.addEventListener('wheel', (e) => {
-  e.preventDefault(); zoom(e.deltaY > 0 ? CAM.ZOOM_STEP : 1 / CAM.ZOOM_STEP);
+  e.preventDefault(); cancelSnap(); zoom(e.deltaY > 0 ? CAM.ZOOM_STEP : 1 / CAM.ZOOM_STEP);
 }, { passive: false });
-$('zIn').addEventListener('click', () => zoom(1 / CAM.ZOOM_STEP));
-$('zOut').addEventListener('click', () => zoom(CAM.ZOOM_STEP));
-$('zReset').addEventListener('click', () => { resetView(); game.camYaw = 0; view.focus(); });
+$('zIn').addEventListener('click', () => { cancelSnap(); zoom(1 / CAM.ZOOM_STEP); });
+$('zOut').addEventListener('click', () => { cancelSnap(); zoom(CAM.ZOOM_STEP); });
+$('zReset').addEventListener('click', () => { snapView(); view.focus(); });
 
 /* A view cube that shows the orbit rather than describing it. Drawn with the
    same projection maths as the arena so it cannot drift out of agreement. */
@@ -952,6 +988,9 @@ function frame(now) {
   if (!last) last = now;
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
+  /* the view snap-back eases here; it must run whether or not the arena is
+     frozen, since the reset is legal while paused too */
+  stepCamTween(now);
 
   {
     /* the pointer goes through the same curve the picture does */
