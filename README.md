@@ -43,7 +43,13 @@ zero honestly rather than being credited to the model.
 | click | shoot |
 | `R` | reload |
 | right-drag | rotate the view |
+| double-click the cube | snap the view back |
 | `Space` | pause |
+
+Rotating or zooming the view brings up a small map in the top-left corner
+showing the same fight from the default angle, so you keep track of which way
+`W` `A` `S` `D` point. It goes when you snap the view back. The keys never
+change meaning - they stay locked to the room, not the camera.
 
 Twenty rounds to a magazine. It reloads on the same key and the same timer you
 do, and it had to learn when — from you, habit and all. Reload only when the

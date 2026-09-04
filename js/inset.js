@@ -238,11 +238,32 @@ export function initInset(game) {
     get() { return { ...opt, fitAspect: fitA, height: lastH, width: INSET_W }; },
   };
 
+  /* HOW OFTEN IT REDRAWS, and why it is not every frame.
+   *
+   * This is a navigation aid - it says which way is north while the camera is
+   * turned - not something anyone reads frame by frame, so it is drawn about
+   * 25 times a second instead of at the display's rate. Measured on the
+   * owner's machine (50 Hz, 1824x812, camera turned): frames that missed the
+   * deadline fell from 39-46% to 11%, and the game's per-frame code from
+   * 5.8 to 4.7 ms. It costs nothing where there was headroom already.
+   *
+   * A TIME gap rather than every-other-frame on purpose: a frame counter
+   * would mean 30 Hz on a 60 Hz screen and 60 Hz on a 120 Hz one, which is
+   * the wrong thing to hold constant. See dev_log/perf/.
+   *
+   * The show/hide toggle stays on EVERY frame, so appearing and vanishing
+   * with the camera is still immediate; only the drawing is paced. */
+  const REDRAW_MS = 40;
+  let lastDraw = 0;
+
   (function tick() {
     requestAnimationFrame(tick);
     const on = offDefault();
     wrap.style.display = on ? 'block' : 'none';
     if (!on || !game.room) return;         /* free while the view is at default */
+    const nowMs = performance.now();
+    if (nowMs - lastDraw < REDRAW_MS) return;
+    lastDraw = nowMs;
     /* A PANEL MUST NEVER BE ABLE TO KILL THE GAME — the rule the six instrument
        panels follow. This has its own rAF, so a throw would stop only this loop,
        but it would stop it for good: report once and carry on. */
