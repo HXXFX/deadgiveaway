@@ -701,8 +701,14 @@ export function drawSpark(game) {
   };
   const cw = chip('you', px(d, 10), CAST.blue);
   chip('it', px(d, 10) + cw, CAST.red);
+  /* label() takes (col, size, align) - there is no weight slot. Passing one
+     put 900 into textAlign, which is not a valid value: the browser rejected
+     it, left the alignment at 'left', and this line - anchored at the RIGHT
+     edge - drew off the end of the panel. It also logged a warning on every
+     draw, thousands per session. The neighbours with the same shape are
+     text() calls, which DO take a weight; this was the odd one out. */
   label(g, d, tape.you[n - 1] + ' – ' + tape.it[n - 1], w - px(d, 10), px(d, 15),
-        P.ink, VAL, 900, 'right');
+        P.ink, VAL, 'right');
   label(g, d, 'one step a round · ' + (game.A.n || 0).toLocaleString() + ' frames watched',
         px(d, 10), h - px(d, 4), P.ink3, 9);
 }
