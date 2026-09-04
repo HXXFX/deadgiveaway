@@ -216,6 +216,22 @@ window.__brain = { save: saveBrain, offer: offerSavedBrain };
 
    setCrt(false) un-curves the pointer to match the now-flat picture -- the two
    must always read the same formula. */
+/* THE NAVIGATION INSET. A small second screen showing the DEFAULT view, which
+   appears when the arena view is rotated or zoomed and goes again on reset. It
+   answers "when I rotate the view I lose which way WASD points" WITHOUT touching
+   what the four keys mean — so the Mirror's world, and any saved brain, are
+   unaffected. It adds nothing to this frame loop; it runs its own, and that loop
+   returns before drawing anything while the view is at its default.
+
+   Imported dynamically so it is fetched only once the game is up, and it can be
+   turned off outright. Settings were chosen on dev_log/bench/inset.html and stay
+   overridable: ?inset=off, ?frame=, ?glow=, ?pos=. See js/inset.js. */
+if (_q.get('inset') !== 'off') {
+  import('./inset.js')
+    .then((m) => m.initInset(game))
+    .catch((e) => console.error('the navigation inset failed to load: ' + e.message, e));
+}
+
 if (_q.get('nocrt') === '1') {
   setCrt(false);
   $('view').style.filter = 'none';
