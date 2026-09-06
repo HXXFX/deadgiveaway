@@ -156,6 +156,24 @@ export function report(L, g) {
      that room. Being one point short of the control reads as -33%. */
   line(`             leaving only ${pc(1 - A.keysBase)} of room above it to win`);
   line(`             so the part it actually learned is ${pc(Math.max(0, A.keys))}`);
+  /* AND THE OTHER MOVEMENT QUESTION, because the one above is close to
+     unwinnable and says so in every session. `hands` grades whether the policy
+     calls your next key set on the frame you change it: measured across two
+     real sessions the ceiling for ANY predictor is about 22%, the policy gets
+     5%, and the control gets to read the consequence off the body's velocity.
+     It printed 0% through a change that TRIPLED how often the Mirror called a
+     direction change, which is the definition of a number that cannot see.
+     `moves` asks instead whether it moves the way you move in a situation like
+     the one it is in - which is the thing a player feels. Validated to
+     discriminate before it was printed: it separates a real policy from a
+     random one by 0.51. dev_log/research/AI-FIDELITY.html. */
+  if (A.movesN > 200) {
+    line(`    moves    in a place like the one it is in, it moves the way you`);
+    line(`             move: its mix sits ${A.movesRaw.toFixed(2)} from yours`);
+    line(`             matching your overall habits and ignoring the situation`);
+    line(`             sits ${A.movesBase.toFixed(2)} away`);
+    line(`             so it removes ${pc(A.moves)} of what ignoring it costs`);
+  }
   /* THESE LABELS DESCRIBED THE OLD MEASUREMENT. When the aim became a choice
      among directions the numbers changed meaning and the words did not, so the
      report said "its error 0.8822 rad per frame" about what is now a hit rate.

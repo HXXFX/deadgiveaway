@@ -478,6 +478,11 @@ export function makeAgent(seed) {
        so study can prefer frames from the player's best lives — the owner's
        rule, extended from the trigger to everything: learn the best of me */
     lq: new Float32Array(NET.BUF),
+    /* MOVES: how the player's movement MIX compares to the policy's, within
+       each kind of situation. Six of them: near, middle and far, times whether
+       there is a line of sight. See the moves score in agentScore. */
+    styYou: new Float32Array(6 * 16), styIt: new Float32Array(6 * 16),
+    styAll: new Float32Array(16), styN: new Float32Array(6),
     youPend: 0, youLifeN: 0, qMean: 0, qN: 0, goodFrames: 0,
     /* how many extra candidates each draw competes against. 0 reproduces the
        old uniform behaviour exactly, which is the control this must be measured
@@ -786,6 +791,38 @@ export function learn(p, x, y) {
   const seed = (n) => n === 0;
   const ema = (cur, v, rate, isFirst) => (isFirst ? v : lerp(cur, v, rate));
   const first = seed(p.agreeN);
+  /* ---- MOVES: the mix, not the moment ------------------------------------
+   *
+   * The hands score asks whether the policy calls the player's next key set on
+   * the frame they change it. Measured over two real sessions, that is close to
+   * unwinnable: the ceiling for ANY predictor is about 22%, the policy manages
+   * 5%, and a control that reads the keys off the body's own velocity beats
+   * everything by getting to see the consequence. It reads 0% whatever is
+   * changed behind it - including a change that tripled how often the Mirror
+   * called a direction change.
+   *
+   * This asks the other question, the one a player actually feels: IN A
+   * SITUATION LIKE THIS ONE, does it move the way you move? The situations are
+   * split six ways and the two movement mixes are compared inside each. The
+   * control is the player's own overall mix applied everywhere, which is what a
+   * policy that had learned habits but no sense of situation would produce -
+   * beating it is the definition of having learned a style.
+   *
+   * Validated before it was trusted: it separates a real policy from one
+   * choosing uniformly at random by 0.51, so it discriminates rather than
+   * scoring everything alike. See dev_log/research/AI-FIDELITY.html. */
+  {
+    const d = x[18], b = (d < 0.25 ? 0 : d < 0.5 ? 1 : 2) * 2 + (x[21] > 0.5 ? 1 : 0);
+    let yb = 0;
+    for (let k = 0; k < 4; k++) if (y[k] > 0.5) yb |= 1 << k;
+    p.styYou[b * 16 + yb]++; p.styAll[yb]++; p.styN[b]++;
+    const q0 = sig(o[0]), q1 = sig(o[1]), q2 = sig(o[2]), q3 = sig(o[3]);
+    for (let c = 0; c < 16; c++) {
+      p.styIt[b * 16 + c] += ((c & 1) ? q0 : 1 - q0) * ((c & 2) ? q1 : 1 - q1)
+                           * ((c & 4) ? q2 : 1 - q2) * ((c & 8) ? q3 : 1 - q3);
+    }
+  }
+
   let hit = 0, base = 0;
   for (let k = 0; k < 4; k++) {
     if ((sig(o[k]) > 0.5 ? 1 : 0) === y[k]) hit++;
@@ -1904,6 +1941,35 @@ export function act(p, x, prevKeys, rnd, frame) {
 
 /* How much of you it has actually got, measured only on things it was graded on
    before it saw them. No part of this is a claim about the weights. */
+/* the moves score: how far the policy's movement mix sits from the player's
+   inside each kind of situation, against a control that ignores the situation
+   entirely. Bins with too little in them are left out rather than averaged from
+   noise. */
+function movesScore(p) {
+  const norm = (a, o, out) => {
+    let t = 0;
+    for (let i = 0; i < 16; i++) t += a[o + i];
+    for (let i = 0; i < 16; i++) out[i] = t ? a[o + i] / t : 0;
+    return t;
+  };
+  const P = MV_P, Q = MV_Q, G = MV_G;
+  norm(p.styAll, 0, G);
+  let wsum = 0, dPol = 0, dCtl = 0;
+  for (let b = 0; b < 6; b++) {
+    if (p.styN[b] < 60) continue;
+    const n = norm(p.styYou, b * 16, P);
+    norm(p.styIt, b * 16, Q);
+    let tp = 0, tc = 0;
+    for (let i = 0; i < 16; i++) { tp += Math.abs(P[i] - Q[i]); tc += Math.abs(P[i] - G[i]); }
+    dPol += n * tp / 2; dCtl += n * tc / 2; wsum += n;
+  }
+  if (!wsum) return { moves: 0, movesRaw: 0, movesBase: 0, movesN: 0 };
+  const pol = dPol / wsum, ctl = dCtl / wsum;
+  return { moves: ctl > 1e-6 ? Math.max(0, (ctl - pol) / ctl) : 0,
+           movesRaw: pol, movesBase: ctl, movesN: wsum };
+}
+const MV_P = new Float32Array(16), MV_Q = new Float32Array(16), MV_G = new Float32Array(16);
+
 export function agentScore(p) {
   const warm = p.agreeN > 600;
   /* each one is (what it did - what the control would have done), scaled by the
@@ -1921,6 +1987,7 @@ export function agentScore(p) {
        channel acts. Gated on decisions SEEN, not frames watched — a player
        who never changes keys gives it no decisions to be graded on, and that
        reads 0 honestly ("nothing demonstrated"), not as a failure. */
+    ...movesScore(p),
     keys: (p.decN > 100) ? over(p.decAgree, Math.max(p.decBase, p.decVel), 1) : 0,
     keysRaw: p.decAgree, keysBase: Math.max(p.decBase, p.decVel),
     keysMajority: p.decBase, keysFromMotion: p.decVel, keysDecN: p.decN,
