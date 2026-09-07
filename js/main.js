@@ -675,8 +675,14 @@ function drainEvents() {
             e.studied.passes + ' extra passes)'
           : e.line;
         hud.banner('Round ' + game.round, st2, 3200);
-        saveBrain();          /* a study beat is the natural save point */
       }
+      /* EVERY study beat saves, whichever banner was shown. This sat inside the
+         else above, so the moment the Mirror had learned enough to have noticed
+         something - which is every round from about the third - the brain stopped
+         being saved. Measured on a continued session: one save a minute in, then
+         seventeen beats without one while the live brain doubled. "It remembers
+         you between sessions" was only true for a beginner's Mirror. */
+      saveBrain();
     } else if (e.kind === 'death') {
       /* A SHEET, NOT A TOAST. A toast let the round carry on around a body that
          nothing could revive -- see reviveRound() in sim.js. The round still
