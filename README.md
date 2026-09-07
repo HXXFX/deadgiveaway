@@ -52,9 +52,14 @@ showing the same fight from the default angle, so you keep track of which way
 change meaning - they stay locked to the room, not the camera.
 
 Twenty rounds to a magazine. It reloads on the same key and the same timer you
-do, and it had to learn when — from you, habit and all. Reload only when the
-gun runs dry and it will fight down to the last round; top up early to feel
-safe and it will do that instead.
+do, and it had to learn when — from you, habit and all.
+
+Measured, it has learned *that* you reload, and that you do it as the magazine
+runs down. It has not learned *how far* you let it run. Against a player who
+fights down to their last few rounds it still tops up early — firing about five
+rounds between reloads where they fire fourteen, and never once being caught
+empty where they spend 8% of a fight that way. A real gap, honestly one of the
+two things most worth fixing next.
 
 ## Your data
 
