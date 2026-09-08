@@ -14,7 +14,7 @@ import {
   useVenue, setCrt,
 } from './render.js';
 import * as hud from './hud.js';
-import { agentScore, OBS } from './agent.js';
+import { agentScore, OBS, RATE, RELOADTEMPO } from './agent.js';
 import { report } from './log.js';
 
 const $ = (id) => document.getElementById(id);
@@ -51,6 +51,18 @@ if (_q.get('watch') === '1') { _unattended = true; setTimeout(() => setWatch(tru
    It would sit at full health forever, and the frozen game looked like an AI
    that had stopped shooting. Dev-only, changes no rule of play. */
 if (_q.get('unattended') === '1') _unattended = true;
+/* ?samepace=0 - count your rate of fire the OLD way, on every frame with a
+   line, instead of only on frames where you could have fired. On by default
+   since 2026-09-08; the switch is for comparison. A saved brain records its
+   footing and re-seeds only the two rates on a change. See agent.js RATE. */
+if (_q.get('samepace') === '0') RATE.SAMEPACE = false;
+else if (_q.get('samepace') === '1') RATE.SAMEPACE = true;
+game.A.samepace = RATE.SAMEPACE ? 1 : 0;   /* saved with the brain; see loadBrainInto */
+/* ?reloadtempo=0 - decide the reload twelve times a second again, the old
+   way (it reloaded 77 times in a session, median 17 of 20 left). On by default
+   since 2026-09-08; the switch is for comparison. See agent.js RELOADTEMPO. */
+if (_q.get('reloadtempo') === '0') RELOADTEMPO.ON = false;
+else if (_q.get('reloadtempo') === '1') RELOADTEMPO.ON = true;
 
 /* THE MIRROR CAN REMEMBER YOU — locally, and only by your choice (plan D1).
  *
@@ -74,6 +86,9 @@ const BRAIN_KEY = 'dg.brain.v1';
  * choice made. So the card raises this flag before it is shown, and only the
  * two fates that are meant to persist lower it again. */
 let _noSave = false;
+/* true only while the remember-me card is up and no fate has been taken: the
+   live agent is then an empty stand-in, and the rival is the STORED record */
+let _undecided = false;
 const _persistOK = () => !_unattended && !game.headless && !_q.has('fresh') &&
                          game.mode === 'play' && typeof localStorage !== 'undefined';
 const _b64 = (fa) => { let s = ''; const u = new Uint8Array(fa.buffer, fa.byteOffset, fa.byteLength);
@@ -86,16 +101,86 @@ const BRAIN_ARRS = ['w1', 'b1', 'w2', 'b2', 'w3', 'b3', 'rw1', 'rb1', 'rw2'];
 const BRAIN_NUMS = ['rb2', 'biasLine', 'biasBlind', 'rateYouLine', 'rateYouBlind',
                     'rateYouLineBest', 'logitLine', 'logitBlind', 'logitLineN',
                     'logitBlindN', 'ppoWarm', 'rehearsals', 'rehearsalsSkipped',
-                    'rehearsalsVetoed', 'lessons'];
+                    'rehearsalsVetoed', 'lessons', 'samepace',
+                    'reloadWinSum', 'reloadWinN'];
+/* the record itself, shared by the browser save and the file export so the
+   two can never drift apart */
+function buildBrain() {
+  const A = game.A, out = { v: 1, obs: OBS, at: Date.now(), arrs: {}, nums: {} };
+  for (const k of BRAIN_ARRS) out.arrs[k] = _b64(A[k]);
+  for (const k of BRAIN_NUMS) out.nums[k] = A[k] || 0;
+  return out;
+}
 function saveBrain() {
   if (!_persistOK() || _noSave) return;
   try {
-    const A = game.A, out = { v: 1, obs: OBS, at: Date.now(), arrs: {}, nums: {} };
-    for (const k of BRAIN_ARRS) out.arrs[k] = _b64(A[k]);
-    for (const k of BRAIN_NUMS) out.nums[k] = A[k] || 0;
-    localStorage.setItem(BRAIN_KEY, JSON.stringify(out));
+    localStorage.setItem(BRAIN_KEY, JSON.stringify(buildBrain()));
   } catch (e) { /* storage full or blocked: the game must never break over a save */ }
 }
+/* YOUR RIVAL, AS A FILE.
+ *
+ * Four sessions of a brain were lost on 2026-09-08 because the only place it
+ * lived was one browser's local storage, and that browser (the Claude app's
+ * preview pane) keeps its storage in memory. A brain worth keeping has to be
+ * able to leave the browser. The download carries exactly the record the
+ * game saves for itself; loading one goes through the same loadBrainInto()
+ * that CONTINUE uses, then saves it here so it is this browser's rival too. */
+function exportBrain() {
+  /* WHILE THE CARD IS UP, THE RIVAL IS THE SAVED ONE, not the empty agent behind
+     the card - measured: the first export from the card wrote a 0-lesson file.
+     After Quick play the live Mirror is the thing on screen, so that is what is
+     saved, which is also how a quick-play Mirror can be kept. */
+  let out = null;
+  if (_undecided) { try { out = JSON.parse(localStorage.getItem(BRAIN_KEY) || 'null'); } catch (e) {} }
+  if (!out || out.v !== 1) out = buildBrain();
+  const blob = new Blob([JSON.stringify(out)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'dg-brain-' + (out.nums.lessons || 0) + 'l-' + Date.now() + '.json';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  hud.toast('Rival saved to a file', (out.nums.lessons || 0).toLocaleString() + ' lessons · check your downloads', 4000);
+}
+/* the text path is separate from the file picker so a harness can prove the
+   round trip without a download in the way */
+function importBrainText(text) {
+  let saved = null;
+  try { saved = JSON.parse(text); } catch (e) {}
+  if (!saved || saved.v !== 1 || saved.obs !== OBS || !saved.arrs || !saved.nums) {
+    hud.toast('Not a rival this build can read', 'the file is not a Dead Giveaway brain, or is from a different build', 4000);
+    return false;
+  }
+  if (!loadBrainInto(game.A, saved)) {
+    hud.toast('Not a rival this build can read', 'its brain is a different shape from this one', 4000);
+    return false;
+  }
+  hud.hideSheet();
+  _noSave = false; _undecided = false;    /* it is the rival now, and saves from here */
+  game.remembered = (saved.nums.lessons || 0);
+  saveBrain();
+  hud.banner('Round 1 — it walked in knowing you',
+             (saved.nums.lessons || 0).toLocaleString() + ' lessons, loaded from a file', 3200);
+  togglePause(false); view.focus();
+  return true;
+}
+function installBrainButtons() {
+  const s = document.getElementById('brainSave'), l = document.getElementById('brainLoad'),
+        f = document.getElementById('brainFile');
+  if (!s || !l || !f || s.dataset.wired) return;
+  s.dataset.wired = '1';
+  s.addEventListener('click', exportBrain);
+  l.addEventListener('click', () => { f.value = ''; f.click(); });
+  f.addEventListener('change', () => {
+    const file = f.files && f.files[0];
+    if (!file) return;
+    const r = new FileReader();
+    r.onload = () => importBrainText(String(r.result));
+    r.readAsText(file);
+  });
+  window.__brain = Object.assign(window.__brain || {}, { build: buildBrain, importText: importBrainText });
+}
+addEventListener('DOMContentLoaded', installBrainButtons);
+if (document.readyState !== 'loading') installBrainButtons();
 function loadBrainInto(A, saved) {
   for (const k of BRAIN_ARRS) {
     const fa = _unb64(saved.arrs[k], A[k].length);
@@ -103,6 +188,15 @@ function loadBrainInto(A, saved) {
     A[k].set(fa);
   }
   for (const k of BRAIN_NUMS) A[k] = saved.nums[k] || 0;
+  /* WHICH FOOTING WAS THIS PACE COUNTED ON? The three rates above persist, and
+     a brain grown on one denominator continued on the other would chase a
+     blend. Re-seed only the rates; the weights, the lessons and the adjuster's
+     own climb carry over. They re-seed within about a minute. */
+  if ((saved.nums.samepace || 0) !== (RATE.SAMEPACE ? 1 : 0)) {
+    A.rateYouLine = 0; A.rateYouBlind = 0; A.rateYouLineBest = 0;
+    A.lineN = 0; A.blindN = 0; A.lifeLineN = 0; A.lifeFireN = 0; A.lifeLineAll = 0;
+  }
+  A.samepace = RATE.SAMEPACE ? 1 : 0;
   return true;
 }
 function offerSavedBrain() {
@@ -112,7 +206,7 @@ function offerSavedBrain() {
   if (!saved || saved.v !== 1 || saved.obs !== OBS) return;   /* other build: start clean */
   togglePause(true);
   /* undecided from here until a fate is taken — see _noSave above */
-  _noSave = true;
+  _noSave = true; _undecided = true;
   const lessons = (saved.nums.lessons || 0).toLocaleString();
   /* THREE FATES, owner's words: CONTINUE the rival it became, QUICK PLAY a
      blank Mirror that is thrown away when you leave, or NEW STORY and it
@@ -128,7 +222,7 @@ function offerSavedBrain() {
       try { localStorage.removeItem(BRAIN_KEY); } catch (e) {}
       /* the story really does start over: this blank brain becomes the new
          rival and saves from here, so the flag comes back down */
-      _noSave = false;
+      _noSave = false; _undecided = false;
       hud.banner('It forgot you', 'an empty brain, and no idea who you are', 2600);
       togglePause(false); view.focus();
     },
@@ -151,6 +245,7 @@ function offerSavedBrain() {
          cannot read, and writing over it would be the same silent loss */
       if (!loadBrainInto(game.A, saved)) return togglePause(false);
       _noSave = false;
+      _undecided = false;
       /* ROUND 1, WITH MEMORY — the owner's ruling. The round count is
          this session's story (reports, streaks and the difficulty curve all
          compare session to session), so a remembered brain does not resume
@@ -164,6 +259,7 @@ function offerSavedBrain() {
     cta2: 'Quick play',
     onGo2: () => {
       _noSave = true;             /* already up; explicit, because it is the point */
+      _undecided = false;
       hud.banner('Quick play', 'a blank Mirror — nothing from this one is kept', 2600);
       togglePause(false); view.focus();
     },
@@ -174,7 +270,8 @@ function offerSavedBrain() {
 }
 addEventListener('beforeunload', saveBrain);
 /* test hook, same precedent as __game: the harness drives the real functions */
-window.__brain = { save: saveBrain, offer: offerSavedBrain };
+/* merged, not replaced: installBrainButtons() adds the file round trip here */
+window.__brain = Object.assign(window.__brain || {}, { save: saveBrain, offer: offerSavedBrain });
 
 /* the study pause, remembered per-browser (plan D3) */
 {

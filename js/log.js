@@ -15,7 +15,7 @@
  * thing it is measuring.
  */
 import { FOE, PLAYER, CROWD } from './config.js';
-import { agentScore } from './agent.js';
+import { agentScore, RATE } from './agent.js';
 
 const EVERY_MS = 500;
 const MAX_SAMPLES = 4800;        /* 40 minutes at 2 Hz */
@@ -199,6 +199,8 @@ export function report(L, g) {
   line(`             in its sights — you fire on ${(100 * (g.A.rateYouLine || 0)).toFixed(1)}% of yours`);
   if ((g.A.rateYouLineBest || 0) > (g.A.rateYouLine || 0) * 1.15)
     line(`             (the best pace you have shown it: ${(100 * g.A.rateYouLineBest).toFixed(1)}% — that is what it now chases)`);
+  if (RATE.SAMEPACE)
+    line('             (both paces counted the same way: only frames where a shot was possible)');
   line('');
   line('  Every one is graded BEFORE it is trained on, so none of this is a');
   line('  memory of the training set.');

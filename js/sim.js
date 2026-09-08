@@ -520,7 +520,14 @@ export function step(g, input, dtMs) {
        one was already running, or because the magazine was full, teaches a
        cadence nobody has. */
     a2[RELOAD] = g.youReloaded ? 1 : 0;
-    learn(g.A, g.obsYou, a2);
+    /* COULD THEY HAVE FIRED THIS FRAME? Exact, and safe on the frame they did:
+       youFired short-circuits it, and on any other frame lastShot belongs to an
+       earlier one, so the cadence test reads honestly. Only read under
+       RATE.SAMEPACE (see agent.js); computing it costs three comparisons. */
+    const youCould = g.youFired
+      || ((g.you.ammo || 0) > 0 && !(g.you.reloadUntil > g.now)
+          && (g.now - (g.you.lastShot || 0)) >= PLAYER.fireEvery);
+    learn(g.A, g.obsYou, a2, youCould);
   }
   g.keysPrev = new Set(input.keys);
   g.youFired = false;

@@ -315,6 +315,74 @@ export const NAIM = AIM_DEG.length;
    part that is actually a skill and the part it can watch the player perform. */
 export const RELOAD = 5 + NAIM;
 export const ACT = 6 + NAIM;
+
+/* COUNT THE PLAYER'S PACE THE WAY THE MIRROR'S IS COUNTED.
+ *
+ * The trigger adjuster (biasLine, below) steers the Mirror's rate of fire
+ * toward the player's, and the two rates never shared a denominator:
+ * noteFired() counts the Mirror only on frames where a shot was POSSIBLE
+ * (loaded, not reloading, 190 ms since the last one) and a line existed;
+ * learn() counted the player on every frame with a line. HANDOFF 66 recorded
+ * the asymmetry; gating the player's side on x[26] drove the rate to 0.000%
+ * because sinceFire is reset before the observation is built, so every firing
+ * frame was excluded. That attempt was reverted and the gap left standing.
+ *
+ * Measured 2026-09-07 on the owner's three recorded sessions: on the Mirror's
+ * own footing the owner fires on 26.1%, 27.4% and 28.0% of their chances. The
+ * adjuster was chasing 5-8%, reached it, and sat there - two continued
+ * sessions, gap 727 ms and 728 ms, against the owner's 325 ms. The loop was
+ * aiming at a third of the real pace and hitting it (HANDOFF 97).
+ *
+ * With SAMEPACE on, the player's line rate, blind rate and per-life best are
+ * counted only on frames where THEY could have fired. sim.js works that out
+ * exactly (g.youFired short-circuits it, so a firing frame always counts, and
+ * on any other frame lastShot is from an earlier frame, so the cadence test is
+ * honest). A caller that cannot supply it - a replay - gets the label-derived
+ * version: a shot within the last 11 frames blocks the trigger.
+ *
+ * rateYouLine and rateYouLineBest persist in the saved brain, so main.js
+ * records which footing a brain was counted on and re-seeds only those rates
+ * when it changes; the weights and the adjuster's climb carry over.
+ *
+ * ON BY DEFAULT since 2026-09-08. A/B'd by the owner from an empty brain with
+ * the reload fix: 10 kills in the first session where every first session
+ * before had 0, its gap 477 ms where it had been 900-950, its rate level with
+ * theirs on one footing by the second session - and the first felt report in
+ * the project's history that moved: "more fun and intense than the older
+ * version". ?samepace=0 turns it off for comparison. */
+export const RATE = { SAMEPACE: true };
+
+/* DECIDE THE RELOAD ONCE PER TAUGHT WINDOW, NOT TWELVE TIMES A SECOND.
+ *
+ * The reload label is a window: on a press, learn() relabels up to 45 of the
+ * preceding low-magazine frames as "reload", so the net's output means "a
+ * reload is due within about that window". act() then samples that per-frame
+ * rate once every DECIDE_EVERY frames. Measured 2026-09-07 on a Mirror trained
+ * on the owner's own frames: its reload probability at 17-19 rounds is
+ * 0.3-0.9%, and 12 of 19 reloads happened there anyway, because it spends
+ * most of its life near full and a small probability times thousands of
+ * decisions is a certainty. In the owner's live session it reloaded 77 times,
+ * median 17 of 20 left, 38% of the session with the gun open; the owner
+ * reloads at a median of 6 and fires 14 rounds per reload (HANDOFF 97-98).
+ * The code already met this once - per-frame sampling "reloaded ~7 rounds
+ * earlier than its teacher" - and slowed the decision to one in five frames.
+ * This is the same correction taken to the label's own length.
+ *
+ * With ON, the per-decision probability is the net's output times
+ * DECIDE_EVERY over the measured label window (labelled frames per press,
+ * tracked as presses arrive; 46 until one has) WHILE THE MIRROR HAS ROUNDS.
+ * On an empty magazine the decision is left exactly as before: that path has
+ * never starved, and the net reads lower at low ammo in the Mirror's own
+ * situations than on the player's, so scaling there risks the original
+ * starvation bug. The rehearsal's gradient and log-probability are taken
+ * against the same scaled probability the decision was drawn from
+ * (reloadScale travels with the action).
+ *
+ * ON BY DEFAULT since 2026-09-08, A/B'd together with RATE.SAMEPACE: reloads
+ * 77 -> 48 in a session, median magazine at reload 17 -> 10 of 20 (the owner:
+ * 6), empty-gun time 0% -> 3% (the owner: 6%), no starvation. ?reloadtempo=0
+ * turns it off for comparison. */
+export const RELOADTEMPO = { ON: true };
 export const AIM_BIN = AIM_DEG.map((d) => d / 57.2958);
 /* how far a sampled aim may wander inside its own bin: half way to each
    neighbour, so the fine bins stay fine and the coarse ones still cover */
@@ -579,7 +647,8 @@ export function makeAgent(seed) {
        per life (clear-line fires over clear-line frames, one whole life at a
        time), and only lives with enough line time count. The trigger chases
        this, not the current mood. */
-    rateYouLineBest: 0, lifeLineN: 0, lifeFireN: 0,
+    rateYouLineBest: 0, lifeLineN: 0, lifeFireN: 0, lifeLineAll: 0, sinceYouShot: 0,
+    reloadWinSum: 0, reloadWinN: 0,
     /* fast twins of the two measured rates: the CONTROLLER steers on these
        (4x shorter horizon) while the display keeps the smooth originals —
        the deadband null established that the wobble is measurement LAG */
@@ -761,7 +830,7 @@ function stepOne(p, x, y) {
 /* One lesson: what they saw, what they did. Graded before it is learned from,
    so the agreement number below is always "how well would it have done on
    something it had not seen" and never a memory of the training set. */
-export function learn(p, x, y) {
+export function learn(p, x, y, youCould) {
   const o = forwardAgent(p, x);
   const E = 0.0015;
   /* THE FIRST SAMPLE SEEDS AN AVERAGE. IT DOES NOT AVERAGE WITH ZERO.
@@ -996,16 +1065,28 @@ export function learn(p, x, y) {
      trigger bias to -4.5, and the Mirror fired LESS (duellist 38 shots -> 29,
      gap 506 ms -> 698 ms). Measured, reverted, left alone. Do not re-apply this
      without measuring rateYouLine directly: it is the number that collapses. */
+  /* could the player have fired on this frame? Only asked under RATE.SAMEPACE;
+     otherwise every frame counts, exactly as before. A firing frame ALWAYS
+     counts - see RATE for why that matters. */
+  const could = !RATE.SAMEPACE ? true
+    : (youCould !== undefined ? !!youCould
+       : (y[4] > 0.5 || (x[34] > 0.0001 && x[35] < 0.5 && (p.sinceYouShot || 0) >= 12)));
   if (x[21] > 0.5) {
-    p.rateYouLine = ema(p.rateYouLine, y[4] > 0.5 ? 1 : 0, E, seed(p.lineN));
-    p.lineN = (p.lineN || 0) + 1;
-    /* and the per-life tally the best-pace ratchet reads at endYouLife() */
-    p.lifeLineN = (p.lifeLineN || 0) + 1;
-    if (y[4] > 0.5) p.lifeFireN = (p.lifeFireN || 0) + 1;
-  } else {
+    /* every line frame, for the ratchet's "was this life long enough" guard -
+       that question is about fighting time and does not change footing */
+    p.lifeLineAll = (p.lifeLineAll || 0) + 1;
+    if (could) {
+      p.rateYouLine = ema(p.rateYouLine, y[4] > 0.5 ? 1 : 0, E, seed(p.lineN));
+      p.lineN = (p.lineN || 0) + 1;
+      /* and the per-life tally the best-pace ratchet reads at endYouLife() */
+      p.lifeLineN = (p.lifeLineN || 0) + 1;
+      if (y[4] > 0.5) p.lifeFireN = (p.lifeFireN || 0) + 1;
+    }
+  } else if (could) {
     p.rateYouBlind = ema(p.rateYouBlind, y[4] > 0.5 ? 1 : 0, E, seed(p.blindN));
     p.blindN = (p.blindN || 0) + 1;
   }
+  p.sinceYouShot = y[4] > 0.5 ? 0 : (p.sinceYouShot || 0) + 1;
   p.posW = clamp((1 - p.fireRate) / Math.max(0.004, p.fireRate), 1, 12);
 
   p.bx.set(x, p.head * OBS); p.by.set(y, p.head * ACT);
@@ -1053,11 +1134,15 @@ export function learn(p, x, y) {
        exactly the proven cure, a cautious one gets the approach to their own
        level labelled. */
     const at = x[34] + 0.21;
+    let labelled = 1;                      /* the press itself */
     for (let b = 1; b <= 45 && b < p.n; b++) {
       const i = (p.head - 1 - b + NET.BUF * 2) % NET.BUF;
       if (p.bx[i * OBS + 34] > at) break;
-      p.by[i * ACT + RELOAD] = 1;
+      p.by[i * ACT + RELOAD] = 1; labelled++;
     }
+    /* how wide the window really was on this press, for RELOADTEMPO */
+    p.reloadWinSum = (p.reloadWinSum || 0) + labelled;
+    p.reloadWinN = (p.reloadWinN || 0) + 1;
   }
   /* DAMAGE ARRIVES AFTER THE DECISION THAT CAUSED IT -- rounds are in flight
      for about half a second -- so whatever landed since the last frame belongs
@@ -1498,7 +1583,9 @@ export function actionLogProb(o, took) {
   for (let i = 0; i < NAIM; i++) { AP[i] = Math.exp(o[5 + i] - mx); z += AP[i]; }
   for (let i = 0; i < NAIM; i++) AP[i] /= z;
   {
-    const q = sig(o[RELOAD]);
+    /* the probability the reload was actually drawn at (RELOADTEMPO scales it;
+       multiplying by 1 is exact, so the off switch changes nothing) */
+    const q = sig(o[RELOAD]) * (took.reloadScale || 1);
     const a = took.reload ? 1 : 0;
     lp += a ? Math.log(Math.max(1e-8, q)) : Math.log(Math.max(1e-8, 1 - q));
     ent += -(q * Math.log(Math.max(1e-8, q)) + (1 - q) * Math.log(Math.max(1e-8, 1 - q)));
@@ -1540,7 +1627,13 @@ export function ppoBatch(p, b, idx, from, to) {
     /* the reload head, graded exactly as the trigger is */
     {
       const q = sig(o[RELOAD]);
-      err[RELOAD] = gCoef * (q - (took.reload ? 1 : 0));
+      /* under RELOADTEMPO the reload was drawn at q * scale, so the gradient of
+         -log(pi) is taken against that probability; with scale 1 this is the
+         same expression as before, bit for bit */
+      const rs = took.reloadScale || 1;
+      if (rs === 1) err[RELOAD] = gCoef * (q - (took.reload ? 1 : 0));
+      else { const qe = q * rs;
+        err[RELOAD] = gCoef * (took.reload ? -(1 - q) : qe * (1 - q) / Math.max(1e-8, 1 - qe)); }
       err[RELOAD] += PPO.ENT * q * (1 - q) *
         Math.log(Math.max(1e-8, q) / Math.max(1e-8, 1 - q));
     }
@@ -1696,9 +1789,9 @@ export function endYouLife(p) {
      sustains. So "best" is now the best whole life: clear-line fires over
      clear-line frames across one life, counted only when the life had at
      least 150 line frames (~2.5 s of actual fighting) to average over. */
-  if ((p.lifeLineN || 0) >= 150 && !p.noRatchet)
+  if ((p.lifeLineAll || 0) >= 150 && (p.lifeLineN || 0) > 0 && !p.noRatchet)
     p.rateYouLineBest = Math.max(p.rateYouLineBest || 0, p.lifeFireN / p.lifeLineN);
-  p.lifeLineN = 0; p.lifeFireN = 0;
+  p.lifeLineN = 0; p.lifeFireN = 0; p.lifeLineAll = 0;
   const n = Math.min(p.youLifeN, p.n);
   p.youLifeN = 0;
   if (n < 30) { p.youPend = 0; return 0; }
@@ -1860,6 +1953,13 @@ export function studyOnce(p) {
    the rate it learned rather than all-or-nothing. */
 export const NAMES = ['w', 'a', 's', 'd'];
 export const DECIDE_EVERY = 5;   /* frames — about twelve decisions a second */
+/* the factor RELOADTEMPO applies to the reload's per-decision probability: one
+   decision interval over the taught window, and 1 on an empty magazine */
+export function reloadScale(p, ammo) {
+  if (!RELOADTEMPO.ON || ammo <= 0.0001) return 1;
+  const win = (p.reloadWinN || 0) > 0 ? p.reloadWinSum / p.reloadWinN : 46;
+  return Math.min(1, DECIDE_EVERY / Math.max(win, DECIDE_EVERY));
+}
 /* HOW LONG THE HANDS GRADE GIVES IT TO ANSWER A CHANGE. Three frames, ~50 ms:
    a reaction, not a prediction. See the grading block in learn() for why a
    window is the fair question and for the measured effect on the controls. */
@@ -1924,9 +2024,11 @@ export function act(p, x, prevKeys, rnd, frame) {
      whatever the teacher's habit. One decision per DECIDE_EVERY frames is the
      same rule the keys already follow, for the same reason: a hand does not
      re-decide sixty times a second. */
-  const doReload = fresh ? rnd() < rp : false;
+  const rs = reloadScale(p, x[34]);
+  const rpe = rp * rs;                    /* rs is 1 unless RELOADTEMPO is on */
+  const doReload = fresh ? rnd() < rpe : false;
   const out = { keys, aim, fire, fireP: fp, rawFire: o[4], aimOff: off, aimBin: bin,
-                reload: doReload, reloadP: rp,
+                reload: doReload, reloadP: rpe, reloadRaw: rp, reloadScale: rs,
                 aimP: Array.from(AP, (v) => v / z),
                 keyP: [sig(o[0]), sig(o[1]), sig(o[2]), sig(o[3])],
                 /* what a policy-gradient step needs to grade this decision later:

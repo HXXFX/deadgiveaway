@@ -409,6 +409,19 @@
       <button class="ghosty studybtn" id="pauseLong" aria-pressed="false"
               title="Longer pause: more practice per round.">long</button>
     </span>
+    <!-- YOUR RIVAL, AS A FILE. A browser store is the only place the brain
+         lived, and one browser's store turned out to be in memory: four
+         sessions of it went with an app restart. SAVE TO FILE writes exactly
+         what the game saves for itself; LOAD FILE brings one back and makes it
+         the rival from here on. Same segment style as the study switch. -->
+    <span class="dock-seg" role="group" aria-label="Your rival, as a file">
+      <span class="dock-seg-l">rival</span>
+      <button class="ghosty studybtn" id="brainSave"
+              title="Write the rival's whole brain to a file in your downloads. It is the same record the game keeps in this browser, and nothing is sent anywhere.">save to file</button>
+      <button class="ghosty studybtn" id="brainLoad"
+              title="Load a rival from a file saved here or in another browser. It becomes your saved rival in this browser.">load file</button>
+      <input type="file" id="brainFile" accept=".json,application/json" hidden>
+    </span>
     <span class="dock-gap"></span>
     <button id="btnPause" class="warm">Pause</button>
     <!-- RENAMED from "Start over", which collided with the boot card's "New
