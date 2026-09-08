@@ -68,6 +68,12 @@ network request of any kind. The model of you is saved in your own browser's
 storage — so the Mirror can remember you between sessions — and never anywhere
 else.
 
+It can also leave as a file, on your say-so. **save to file** in the dock writes
+the rival's whole brain to your downloads; **load file** brings one back, in this
+browser or another. A download is a file on your machine and nothing more — still
+no network. If a browser ever loses its storage, that file is the only copy, so
+save one after a session you would mind losing.
+
 When a saved rival exists, the game asks before anything happens. **Continue**
 picks the fight back up. **Quick play** faces a blank Mirror and keeps nothing
 from that session — your saved rival is untouched. **New story** erases the
